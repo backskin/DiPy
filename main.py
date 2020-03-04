@@ -11,13 +11,20 @@ def get_image():
     return img
 
 
-APP = QApplication([])
-window = QWidget()
-vbox = QVBoxLayout()
-LABEL = QLabel('Hello World!')
-BUTTON = QPushButton()
-vbox.addWidget(LABEL)
-vbox.addWidget(BUTTON)
-window.setLayout(vbox)
-window.show()
-APP.exec_()
+def main():
+    APP = QApplication([])
+    window = QWidget()
+    vbox = QVBoxLayout()
+    LABEL = QLabel('Hello World!')
+    BUTTON = QPushButton()
+    vbox.addWidget(LABEL)
+    vbox.addWidget(BUTTON)
+    window.setLayout(vbox)
+    window.show()
+    APP.exec_()
+
+
+if __name__ == '__main__':
+    main()
+
+
