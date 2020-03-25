@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 def writeLog(cpu):
     logname = "CPUtemp_"+strftime("%Y%m%d")+".log"
-    log = open("/home/pi/DiPy/resources/templogs/"+logname, "w")
+    log = open("/home/pi/DiPy/resources/templogs/"+logname, "a")
 
     temp = cpu.temperature
     print(temp)
