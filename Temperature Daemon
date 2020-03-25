@@ -1,0 +1,7 @@
+[Desktop Entry]
+Encoding=UTF-8
+Name=Temperature Daemon
+GenericName=Temperature Daemon
+Type=Application
+Exec=python ~/DiPy/cputemp_script.py
+NoDisplay=false
