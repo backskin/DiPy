@@ -13,8 +13,9 @@ while /bin/true; do
     git config credentials.helper store;
     echo "Commit line";
     git commit --author "backskin"  -a -m "auto-commit (RP)::probably temp only";
-    git push;
+    
     echo "Push line"
+    git push;
     echo "Update-Task: Objectives done";
     echo "Waiting for 2 minutes...";
     sleep 120;
