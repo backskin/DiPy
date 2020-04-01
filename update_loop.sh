@@ -15,7 +15,7 @@ while /bin/true; do
     git commit --author "backskin"  -a -m "auto-commit (RP)::probably temp only"
     
     echo "Push line"
-    git push;
+    git push
     echo "Update-Task: Objectives done"
     echo "Waiting for 2 minutes..."
     sleep 120
