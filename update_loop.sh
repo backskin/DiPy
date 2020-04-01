@@ -7,7 +7,7 @@ while /bin/true; do
     git pull
     echo "Trying to gather all data and commit"
     git add --all
-
+    echo "configuring GIT"
     git config --global user.email "backskin@outlook.com"
     git config --global user.name "backskin"
     git config credentials.helper store
