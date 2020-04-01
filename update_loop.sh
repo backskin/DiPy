@@ -1,8 +1,6 @@
 #!/bin/sh
 cd /home/pi/DiPy
 echo "Update-Task: Start"
-git config --global user.email "backskin@outlook.com"
-git config --global user.name "backskin-pi"
 while /bin/true; do
     echo "Update-Task: Pull...";
     git pull;
