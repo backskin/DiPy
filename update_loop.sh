@@ -1,6 +1,6 @@
 #!/bin/sh
-cd /home/pi/DiPy
 echo "Update-Task: Start"
+cd /home/pi/DiPy
 while /bin/true; do
     echo "Update-Task: Pull...";
     git pull;
