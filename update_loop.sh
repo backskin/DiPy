@@ -9,8 +9,10 @@ while /bin/true; do
     git pull;
     echo "Trying to gather all data and commit";
     git add --all;
+    echo "Commit line"
     git commit --author "backskin"  -a -m "auto-commit (RP)::probably temp only";
     git push;
+    echo "Push line"
     echo "Update-Task: Objectives done";
     echo "Waiting for 2 minutes...";
     sleep 120;
