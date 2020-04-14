@@ -14,4 +14,4 @@ while /bin/true; do
     echo "Update-Task: Objectives done"
     echo "Waiting for 2 minutes..."
     sleep 120;
-done &
+done
