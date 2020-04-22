@@ -9,12 +9,12 @@ filepath="/home/pi/Videos/"$1".h264"
 
 if [ "$1" = "" ] || [ "$2" = "" ]
 then
-	echo "error: your command should be $videoCap <filename> <time>";
+	echo "error: your command should be videoCap <filename> <time>";
 	exit 1
 fi
 
 
-if ! [[ $time =~ $re ]] || [ $time -lt 1000 ]
+if [ $time =~ $re ] || [ $time -lt 1000 ]
 then
    echo "error: wrong parameters (time must be > 1000 ms)";
    exit 1
