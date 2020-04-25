@@ -69,7 +69,8 @@ class SmartWindow(QWidget):
 
         self.contr_slider, contrastColumn = self.make_slider("Contrast", 0, 255, cv2.CAP_PROP_CONTRAST)
         self.bright_slider, brightnessColumn = self.make_slider("Brightness", 155, 255, cv2.CAP_PROP_BRIGHTNESS)
-        self.gain_slider, gainColumn = self.make_slider("Gain", 0, 255, cv2.CAP_PROP_GAIN)
+        # gain is not supported on Raspberry Pi
+        # self.gain_slider, gainColumn = self.make_slider("Gain", 0, 255, cv2.CAP_PROP_GAIN)
         self.expo_slider, expoColumn = self.make_slider("Exposure", -7, -1, cv2.CAP_PROP_EXPOSURE)
         self.satur_slider, saturColumn = self.make_slider("Saturation", 0, 255, cv2.CAP_PROP_SATURATION)
 
