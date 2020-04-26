@@ -77,7 +77,7 @@ class SmartWindow(QWidget):
         self.sliders.addLayout(expoColumn)
         self.sliders.addLayout(brightnessColumn)
         self.sliders.addLayout(contrastColumn)
-        self.sliders.addLayout(gainColumn)
+        # self.sliders.addLayout(gainColumn)
         self.sliders.addLayout(saturColumn)
 
         self.video_cap.release()
@@ -85,8 +85,9 @@ class SmartWindow(QWidget):
 
     def reset_sliders(self):
         self.expo_slider.setValue(self.video_cap.get(cv2.CAP_PROP_EXPOSURE))
-        print(self.expo_slider.value())
         self.bright_slider.setValue(self.video_cap.get(cv2.CAP_PROP_BRIGHTNESS))
+        self.contr_slider.setValue(self.video_cap.get(cv2.CAP_PROP_CONTRAST))
+        self.satur_slider.setValue(self.video_cap.get(cv2.CAP_PROP_SATURATION))
 
     def stream_threaded(self):
         import threading
@@ -101,7 +102,7 @@ class SmartWindow(QWidget):
 
     def stream(self):
         self.video_cap.open(0)
-        self.reset_sliders()
+        # self.reset_sliders()
         while self.stream_status_param and self.video_cap.isOpened():
             rval, current_frame = self.video_cap.read()
             self.avail_frame = current_frame
