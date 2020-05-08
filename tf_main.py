@@ -50,14 +50,14 @@ class SmartWindow(QWidget):
         self.south_panel.addLayout(self.buttons)
         self.south_panel.addLayout(self.sliders)
 
-        self.video_frame = QLabel()
-        self.video_frame.setText("*Frame*")
+        self.frame_box = QLabel()
+        self.frame_box.setText("*Frame*")
 
-        self.video_frame.setAlignment(Qt.AlignCenter)
+        self.frame_box.setAlignment(Qt.AlignCenter)
 
-        self.video_frame.setFixedHeight(self.video_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        self.frame_box.setFixedHeight(self.video_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-        main_layout.addWidget(self.video_frame)
+        main_layout.addWidget(self.frame_box)
 
         self.button_record = self.make_button("Record", self.record_threaded, True)
         self.button_stop_rec = self.make_button("Stop", self.stop_record, True)
@@ -71,8 +71,16 @@ class SmartWindow(QWidget):
         self.flip_checkbox = QCheckBox("H-Flip Image View")
         self.buttons.addWidget(self.flip_checkbox)
         self.flip_checkbox.stateChanged.connect(self.flip_view)
+        self.flip_checkbox.setDisabled(True)
 
-        self.contr_slider, contrastColumn = self.make_slider("Contrast", 0, 255, cv2.CAP_PROP_CONTRAST)
+        self.stroke_param = False
+        self.stroke_checkbox = QCheckBox("Stroke Moving Objects")
+        self.buttons.addWidget(self.stroke_checkbox)
+        self.stroke_checkbox.stateChanged.connect(self.stroked_view)
+        self.stroke_checkbox.setDisabled(True)
+
+        # contrast is relevant in range of [50;200]
+        self.contr_slider, contrastColumn = self.make_slider("Contrast", 50, 200, cv2.CAP_PROP_CONTRAST)
         self.sliders.addLayout(contrastColumn)
         self.bright_slider, brightnessColumn = self.make_slider("Brightness", 155, 255, cv2.CAP_PROP_BRIGHTNESS)
         self.sliders.addLayout(brightnessColumn)
@@ -83,34 +91,56 @@ class SmartWindow(QWidget):
         self.sliders.addLayout(expoColumn)
         self.satur_slider, saturColumn = self.make_slider("Saturation", 0, 255, cv2.CAP_PROP_SATURATION)
         self.sliders.addLayout(saturColumn)
-
+        _, self.avail_frame = self.video_cap.read()
         self.video_cap.release()
         main_layout.addLayout(self.south_panel)
 
     def flip_view(self):
         self.flip_param = self.flip_checkbox.isChecked()
 
+    def stroked_view(self):
+        self.stroke_param = self.stroke_checkbox.isChecked()
+
     def stream_threaded(self):
         import threading
         if not self.stream_status_param:
             self.stream_status_param = True
             self.button_record.setDisabled(False)
+            self.stroke_checkbox.setDisabled(False)
+            self.flip_checkbox.setDisabled(False)
             self.thread = threading.Thread(target=self.stream)
             self.thread.start()
         else:
+            self.stroke_checkbox.setDisabled(True)
+            self.flip_checkbox.setDisabled(True)
             self.stream_status_param = False
             self.button_record.setDisabled(True)
 
+    def draw_stroke(self, frame1, frame2):
+        diff = cv2.absdiff(frame1, frame2)
+        gray = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
+        blur = cv2.GaussianBlur(gray, (5,5), 0)
+        _, thresh = cv2.threshold(blur, 20, 255, cv2.THRESH_BINARY)
+        dilated = cv2.dilate(thresh, None, iterations=3)
+        contrours, _ = cv2.findContours(dilated, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        new_frame = frame2.copy()
+        cv2.drawContours(new_frame, contrours, -1, (255,0,0), 2)
+        return new_frame
+
     def stream(self):
         self.video_cap.open(0)
-        # self.reset_sliders()
         while self.stream_status_param and self.video_cap.isOpened():
-            rval, current_frame = self.video_cap.read()
-            self.avail_frame = current_frame
+            _, current_frame = self.video_cap.read()
             self.record_next_frame = True
             if self.flip_param:
                 current_frame = cv2.flip(current_frame, 1)
-            self.show_frame(current_frame)
+            if self.stroke_param:
+                self.contour_frame = self.draw_stroke(self.avail_frame, current_frame)
+                self.avail_frame = current_frame
+                self.show_frame(self.contour_frame)
+            else:
+                self.avail_frame = current_frame
+                self.show_frame(self.avail_frame)
             cv2.waitKey(self.frame_time_ms)  # Это получается 25 кадров в секунду (примерно)
 
         self.video_cap.release()
@@ -158,7 +188,7 @@ class SmartWindow(QWidget):
     def show_frame(self, np_img):
         height, width, channel = np_img.shape
         q_img = QImage(np_img.data, width, height, QImage.Format_RGB888).rgbSwapped()
-        self.video_frame.setPixmap(QPixmap(q_img))
+        self.frame_box.setPixmap(QPixmap(q_img))
 
     def closeEvent(self, QCloseEvent):
         self.stream_status_param = False
@@ -168,10 +198,12 @@ class SmartWindow(QWidget):
 def main():
     import sys
     app = QApplication(sys.argv)
-    window = SmartWindow('Backskin Window', 720, 640)
+    window = SmartWindow('Backskin Window', 720, 680)
     window.show()
     sys.exit(app.exec_())
 
 
 if __name__ == '__main__':
+    import tensorflow as tf
     main()
+    # print(tf.version.VERSION)
