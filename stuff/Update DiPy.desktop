@@ -1,0 +1,9 @@
+[Desktop Entry]
+Encoding=UTF-8
+Name=Update DiPy
+GenericName=Update DiPy
+Type=Application
+Exec=bash /home/pi/DiPy/update.sh
+NoDisplay=true
+Terminal=true
+StartupNotify=true
