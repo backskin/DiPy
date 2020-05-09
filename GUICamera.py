@@ -4,6 +4,7 @@ from PyQt5.QtWidgets import *
 from threading import Thread, Lock
 from StreamAndRec import StreamAndRec, FrameBuff
 
+
 class MyWidget:
     def __init__(self, widget: QWidget, description: str):
         self.name = description
@@ -23,10 +24,12 @@ class MyWidget:
         out_widget = QWidget()
         layout = QVBoxLayout() if pos == 'v' else QHBoxLayout()
         if with_desc:
-            l = QLabel(self.name)
-            l.setAlignment(Qt.AlignCenter)
-            layout.addWidget(l)
+            name_label = QLabel(self.name)
+            name_label.setAlignment(Qt.AlignCenter)
+            layout.addWidget(name_label)
         layout.addWidget(self.widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setAlignment(Qt.AlignCenter)
         out_widget.setLayout(layout)
         return out_widget
 
@@ -36,10 +39,6 @@ class Slider(MyWidget):
         super().__init__(widget, description)
         self.widget.setMinimum(bounds[0])
         self.widget.setMaximum(bounds[1])
-
-    def set_operation(self, function):
-        self.widget.valueChanged.connect(function)
-        return self
 
     def build_widget(self, pos: str = 'v', with_desc: bool = False):
         wgt = super().build_widget(pos, with_desc)
@@ -62,14 +61,12 @@ class SpinBox(MyWidget):
 
 
 class AdjustDial(Slider):
-    def __init__(self, description: str, PROP: int, agent: StreamAndRec, bounds: tuple, multip=1):
+    def __init__(self, description: str, PROP: int, agent: StreamAndRec, bounds: tuple, multip=1, disable=False):
         dial = QDial()
         super().__init__(dial, description, bounds)
-        self.set_operation(lambda: agent.adjust(PROP, dial.value()*multip))
-        self.reset = lambda: self.widget.setValue(agent.get_property(PROP))
-
-    def reset_value(self):
-        self.reset()
+        dial.valueChanged.connect(lambda: agent.adjust(PROP, dial.value() * multip))
+        self.reset_value = lambda: self.widget.setValue(agent.get_property(PROP))
+        self.widget.setDisabled(disable)
 
 
 class CheckBox(MyWidget):
@@ -95,15 +92,21 @@ class ComboBox(MyWidget):
 class FrameBox(QLabel):
     import numpy as np
 
-    def __init__(self):
+    def __init__(self, np_shape: tuple):
         super().__init__()
-        self.setMinimumWidth(320)
-        self.setMinimumHeight(240)
+        self.setFixedHeight(np_shape[0])
+        self.setFixedWidth(np_shape[1])
+        self.setAlignment(Qt.AlignCenter)
         self.thread_param = False
 
+    def _get_image(self, numpy_picture) -> QImage:
+        return QImage(numpy_picture, numpy_picture.shape[1], numpy_picture.shape[0], QImage.Format_BGR888)
+
     def show_picture(self, picture: np.ndarray):
+        import cv2
         height, width, *_ = picture.shape
         q_img = QImage(picture.data, width, height, QImage.Format_BGR888)
+        # self.setPixmap(QPixmap.convertFromImage(cv2.imencode('.jpg', picture)[1]))
         self.setPixmap(QPixmap(q_img.scaled(self.width(), self.height(), Qt.KeepAspectRatio)))
 
     def start_threaded_update(self, frame_buffer: FrameBuff):
@@ -113,7 +116,6 @@ class FrameBox(QLabel):
 
     def stop_threaded_update(self):
         self.thread_param = False
-        self.setPixmap(None)
 
     def _thread(self, frame_buffer: FrameBuff):
         while self.thread_param:
@@ -128,7 +130,7 @@ class FrameBox(QLabel):
         self.show_picture(cv2.addWeighted(prom, 1., picture, 0.7, 0))
 
 
-def make_button(name: str, do_something, disable: bool=False, checkable=False):
+def make_button(name: str, do_something, disable: bool = False, checkable=False):
     button = QPushButton(name)
     button.clicked.connect(do_something)
     button.setDisabled(disable)
@@ -137,7 +139,7 @@ def make_button(name: str, do_something, disable: bool=False, checkable=False):
 
 
 class SmartWindow(QWidget):
-    def __init__(self, title='Window', size: tuple = (800, 600)):
+    def __init__(self, title='Window', size: tuple = (960, 560)):
 
         super().__init__()
 
@@ -154,12 +156,12 @@ class SmartWindow(QWidget):
         self.start_record_button = make_button("Start Record", self.start_record_handler, disable=True)
         self.setWindowTitle(title)
         self.resize(size[0], size[1])
-        self.setMinimumWidth(size[0])
-        self.setMinimumHeight(size[1])
+        self.setFixedWidth(size[0])
+        self.setFixedHeight(size[1])
 
         self.setLayout(QHBoxLayout())
 
-        self.frame_box = FrameBox()
+        self.frame_box = FrameBox(self.stream_agent.get_frame_shape())
         self.layout().addWidget(self.frame_box)
         self.layout().addWidget(self.make_east_panel())
 
@@ -177,10 +179,12 @@ class SmartWindow(QWidget):
         import cv2
         adjusts = QWidget()
         adjusts.setLayout(QGridLayout())
-        self.dials.append(AdjustDial("Contrast", cv2.CAP_PROP_CONTRAST, self.stream_agent, (50, 200)))
-        self.dials.append(AdjustDial("Brightness", cv2.CAP_PROP_BRIGHTNESS, self.stream_agent, (155, 255)))
-        self.dials.append(AdjustDial("Exposure", cv2.CAP_PROP_EXPOSURE, self.stream_agent, (1, 8), multip=-1))
-        self.dials.append(AdjustDial("Saturation", cv2.CAP_PROP_SATURATION, self.stream_agent, (0, 255)))
+        adjusts.setContentsMargins(0,0,0,0)
+        self.dials.append(AdjustDial("Contrast", cv2.CAP_PROP_CONTRAST, self.stream_agent, (25, 115), disable=True))
+        self.dials.append(AdjustDial("Brightness", cv2.CAP_PROP_BRIGHTNESS, self.stream_agent, (95, 225), disable=True))
+        self.dials.append(
+            AdjustDial("Exposure", cv2.CAP_PROP_EXPOSURE, self.stream_agent, (1, 8), multip=-1, disable=True))
+        self.dials.append(AdjustDial("Saturation", cv2.CAP_PROP_SATURATION, self.stream_agent, (0, 255), disable=True))
         # gain is not supported on Raspberry Pi
         # self.dials.append(AdjustDial("Gain", cv2.CAP_PROP_GAIN, self.stream_agent, (0, 255)))
         i, j = 0, 0
@@ -195,7 +199,7 @@ class SmartWindow(QWidget):
         control_tab = QWidget()
         control_tab.setLayout(QVBoxLayout())
         control_tab.layout().setAlignment(Qt.AlignTop)
-        button_play_pause = make_button("Play/Pause", self.stream_handler, checkable=True)
+        button_play_pause = make_button("Play/Pause", self.stream_handler)
 
         control_tab.layout().addWidget(button_play_pause)
         control_tab.layout().addWidget(self.flip_chbx.build_widget())
@@ -205,16 +209,19 @@ class SmartWindow(QWidget):
         return control_tab
 
     def stream_handler(self):
-        self.stream_agent.stream_threaded()
-        status = self.stream_agent.get_stream_status()
-        for adj_wgt in self.dials:
-            adj_wgt.reset_value()
+
+        status = self.stream_agent.stream_toggle()
         self.start_record_button.setDisabled(not status)
         self.fps_cmbx.activate(status)
         self.flip_chbx.activate(status)
         if status:
+            for adj_wgt in self.dials:
+                adj_wgt.activate(True)
+                adj_wgt.reset_value()
             self.frame_box.start_threaded_update(self.frame_buff)
         else:
+            for adj_wgt in self.dials:
+                adj_wgt.activate(False)
             self.frame_box.stop_threaded_update()
             self.stop_rec_button.setDisabled(True)
 
