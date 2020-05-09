@@ -1,7 +1,0 @@
-[Desktop Entry]
-Encoding=UTF-8
-Name=Hamachi Daemon
-GenericName=Hamachi Daemon
-Type=Application
-Exec=sudo hamachi
-NoDisplay=false

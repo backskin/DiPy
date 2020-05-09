@@ -1,9 +1,0 @@
-[Unit]
-Description=My Script
-
-[Service]
-Type=forking
-ExecStart=sh /home/pi/DiPy/update_loop.sh
-
-[Install]
-WantedBy=multi-user.target
