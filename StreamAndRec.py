@@ -1,14 +1,14 @@
 from threading import Thread, Lock
 from Lib.queue import Queue
-from time import clock
+from time import clock, sleep
 from cv2 import CAP_PROP_FRAME_HEIGHT, CAP_PROP_FRAME_WIDTH
 from cv2 import flip as cv_flip
 from cv2 import VideoCapture as CVCapture, VideoWriter as CVWriter, VideoWriter_fourcc as CVCodec
 
 
 def precise_sleep(last_time, delay: float):
-    while clock() - last_time < delay:
-        pass
+    if clock() - last_time < delay:
+        sleep(delay - (clock() - last_time))
 
 
 class FrameBuff(Queue):
@@ -96,7 +96,7 @@ class StreamAndRec:
             if self._flip_param:
                 _current_frame = cv_flip(_current_frame, 1)
             self._frame_buffer.put_frame(_current_frame, self._record_status)
-            precise_sleep(time_start, delay)
+            precise_sleep(time_start, delay-0.005)
 
     def record_toggle(self):
         from datetime import datetime
@@ -112,7 +112,6 @@ class StreamAndRec:
             self._frame_buffer.__flush__()
             if self._rec_thread is not None and self._rec_thread.is_alive():
                 self._rec_thread.join()
-                print('thread finished!')
             return self._record_file_name
 
     def _record(self, out: CVWriter):
