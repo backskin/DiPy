@@ -5,7 +5,7 @@ from threading import Thread
 from time import sleep
 from StreamAndRec import StreamAndRec, FrameBuff
 from cv2 import imread, addWeighted, CAP_PROP_BRIGHTNESS, CAP_PROP_CONTRAST, \
-    CAP_PROP_SATURATION, CAP_PROP_EXPOSURE, CAP_PROP_GAIN
+    CAP_PROP_SATURATION, CAP_PROP_EXPOSURE, CAP_PROP_GAIN, CAP_PROP_WB_TEMPERATURE, CAP_PROP_SETTINGS
 from os.path import sep as os_sep_
 
 STANDBY_PICTURE = imread('resources' + os_sep_ + 'off.jpg')
@@ -20,8 +20,8 @@ class MyWidget:
     def __widget__(self):
         return self._widget
 
-    def activate(self, state):
-        self._widget.setDisabled(not state)
+    def toggle(self, state=None):
+        self._widget.setDisabled(self._widget.isEnabled() if state is None else not state)
 
     def build_widget(self, pos: str = 'v', with_desc: bool = False):
         """pos - is 'v' or 'h' """
@@ -66,18 +66,20 @@ class SpinBox(MyWidget):
 
 class AdjustDial(Slider):
     def __init__(self, description: str, PROP: int, agent: StreamAndRec, bounds: tuple, multip=1, disable=True):
-        self.dial = QDial()
-        self.PROP = PROP
-        self.agent = agent
-        super().__init__(self.dial, description, bounds)
-        self.dial.valueChanged.connect(
-            lambda: self.agent.adjust(self.PROP, self.dial.value() * multip))
-        self._reset_value = lambda: self.dial.setValue(agent.get_property(self.PROP))
+        self._dial = QDial()
+        self._PROP = PROP
+        self._agent = agent
+        super().__init__(self._dial, description, bounds)
+        self._dial.valueChanged.connect(
+            lambda: self._agent.adjust(self._PROP, self._dial.value() * multip))
+        self._reset_value = lambda: self._dial.setValue(agent.get_property(self._PROP))
         self._widget.setDisabled(disable)
 
-    def reset_and_activate(self):
+    def reinit_prop(self):
+        self._agent.adjust(self._PROP, self._dial.value())
+
+    def reset(self):
         self._reset_value()
-        self.activate(True)
 
 
 class CheckBox(MyWidget):
@@ -86,6 +88,12 @@ class CheckBox(MyWidget):
         if function:
             self._widget.stateChanged.connect(function)
         self._widget.setDisabled(disable)
+
+    def state(self):
+        return self.__widget__().checkState()
+
+    def set_fn(self, function):
+        self._widget.stateChanged.connect(function)
 
 
 class ComboBox(MyWidget):
@@ -105,12 +113,13 @@ class ComboBox(MyWidget):
 class FrameBox(QLabel):
     import numpy as np
 
-    def __init__(self, np_shape: tuple):
+    def __init__(self, frame_buffer: FrameBuff, np_shape: tuple):
         super().__init__()
         self.setFixedHeight(np_shape[0])
         self.setFixedWidth(np_shape[1])
+        self._frame_buffer = frame_buffer
         self.setAlignment(Qt.AlignCenter)
-        self._frame_thread_status = False
+        self._frame_thread_state = False
         self._thread = None
         self.standby()
 
@@ -119,32 +128,39 @@ class FrameBox(QLabel):
         self.setPixmap(QPixmap(q_img.scaled(self.width(), self.height(), Qt.KeepAspectRatio)))
 
     def _fn_thread(self, frame_buffer: FrameBuff):
-        while self._frame_thread_status:
+        while self._frame_thread_state:
             if frame_buffer.has_new_frame():
                 _pic = frame_buffer.last()
                 if _pic is not None:
                     self.show_picture(_pic)
 
-    def connect(self, frame_buffer: FrameBuff):
-        self._frame_thread_status = True
-        self._thread = Thread(target=self._fn_thread, args=(frame_buffer,))
+    def __start_thread__(self):
+        self._frame_thread_state = True
+        self._thread = Thread(target=self._fn_thread, args=(self._frame_buffer,))
         self._thread.start()
 
     def __stop_thread__(self):
-        self._frame_thread_status = False
+        self._frame_thread_state = False
         if self._thread is not None and self._thread.is_alive():
             self._thread.join()
 
-    def standby(self, image=None):
+    def toggle(self, state=False):
+        self._frame_thread_state = state
+        if self._frame_thread_state:
+            self.__start_thread__()
+        else:
+            self.standby()
+
+    def standby(self):
         self.__stop_thread__()
-        self.show_picture(addWeighted(STANDBY_PICTURE, 1., image, 0.7, 0) if image is not None else STANDBY_PICTURE)
+        image = self._frame_buffer.last()
+        self.show_picture(STANDBY_PICTURE if image is None else addWeighted(STANDBY_PICTURE, 1., image, 0.7, 0))
 
 
-def make_button(name: str, do_something, disable: bool = False, checkable=False):
+def make_button(name: str, do_something, disable: bool = False):
     button = QPushButton(name)
     button.clicked.connect(do_something)
     button.setDisabled(disable)
-    button.setCheckable(checkable)
     return button
 
 
@@ -199,7 +215,7 @@ class SmartWindow(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(layout)
 
-        self._frame_box = FrameBox(self._stream_agent.get_frame_shape())
+        self._frame_box = FrameBox(self._frame_buffer, self._stream_agent.get_frame_shape())
         self._status_bar = StatusBar(self._stream_agent)
         self._pack_fps_and_flip = QWidget()
         self._pack_fps_and_flip.setLayout(QHBoxLayout())
@@ -242,14 +258,21 @@ class SmartWindow(QWidget):
     def _make_adjust_tab(self):
         adjusts = QWidget()
         adjusts.setLayout(QVBoxLayout())
+        self._adjs_reset_button = make_button('Reset All', self.auto_adjust)
+        self._adjs_checkbox = CheckBox('Keep This Settings', disable=True)
+        self._adjs_checkbox.set_fn(lambda: self.toggle_dials(not self._adjs_checkbox.state()))
+        adjusts.layout().addWidget(self._adjs_reset_button)
+        adjusts.layout().addWidget(self._adjs_checkbox.build_widget(pos='h'))
         adjusts.layout().setAlignment(Qt.AlignTop)
         adjusts.setContentsMargins(0, 0, 0, 0)
+
+        self._adj_dials.append(AdjustDial("Exposure", CAP_PROP_EXPOSURE, self._stream_agent, (1, 8), multip=-1))
         self._adj_dials.append(AdjustDial("Contrast", CAP_PROP_CONTRAST, self._stream_agent, (25, 115)))
         self._adj_dials.append(AdjustDial("Brightness", CAP_PROP_BRIGHTNESS, self._stream_agent, (95, 225)))
-        self._adj_dials.append(AdjustDial("Exposure", CAP_PROP_EXPOSURE, self._stream_agent, (1, 8), multip=-1))
         self._adj_dials.append(AdjustDial("Saturation", CAP_PROP_SATURATION, self._stream_agent, (0, 255)))
         # gain is not supported on Raspberry Pi
         self._adj_dials.append(AdjustDial("Gain", CAP_PROP_GAIN, self._stream_agent, (0, 255)))
+
         i, j = 0, 0
         row = None
         for dial in self._adj_dials:
@@ -261,10 +284,19 @@ class SmartWindow(QWidget):
                     row_sep.setFrameShape(QFrame.HLine)
                     adjusts.layout().addWidget(row_sep)
                 adjusts.layout().addWidget(row)
-            row.layout().addWidget(dial.build_widget(pos='v', with_desc=True))
+            row.layout().addWidget(dial.build_widget(with_desc=True))
             i += j % 2
             j = (j + 1) % 2
         return adjusts
+
+    def auto_adjust(self):
+        self._stream_agent.adjust(CAP_PROP_SETTINGS, 0.0)
+        for dial in self._adj_dials:
+            dial.reset()
+
+    def toggle_dials(self, state=None):
+        for dial in self._adj_dials:
+            dial.toggle(state)
 
     def _make_control_tab(self):
 
@@ -289,24 +321,25 @@ class SmartWindow(QWidget):
     def _stream_handler(self):
         status = self._stream_agent.stream_toggle()
         self._start_record_button.setDisabled(not status)
-        self._fps_combobox.activate(not status)
-        self._flip_checkbox.activate(status)
-        if status:
-            for adj_wgt in self._adj_dials:
-                adj_wgt.reset_and_activate()
-            self._frame_box.connect(self._frame_buffer)
-        else:
-            for adj_wgt in self._adj_dials:
-                adj_wgt.activate(False)
-            self._frame_box.standby(self._frame_buffer.last())
-            self.stop_rec_button.setDisabled(True)
+        self._adjs_reset_button.setDisabled(not status)
+        self.stop_rec_button.setDisabled(True)
+        self._fps_combobox.toggle(not status)
+        self._flip_checkbox.toggle(status)
+        self._frame_box.toggle(status)
+        self._adjs_checkbox.toggle(status)
+        for adj_wgt in self._adj_dials:
+            if self._adjs_checkbox.state():
+                adj_wgt.reinit_prop()
+            else:
+                adj_wgt.toggle(status)
+                adj_wgt.reset()
 
     def _record_handler(self):
         string = self._stream_agent.record_toggle()
         status = self._stream_agent.get_record_status()
         self._start_record_button.setDisabled(status)
         self.stop_rec_button.setDisabled(not status)
-        self._flip_checkbox.activate(not status)
+        self._flip_checkbox.toggle(not status)
         if string is None:
             self._status_bar.message('Recording stream to file...')
         else:

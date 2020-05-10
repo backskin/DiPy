@@ -1,10 +1,14 @@
 from threading import Thread, Lock
 from Lib.queue import Queue
-from time import clock, sleep
-from backskin_utilites import precise_sleep
+from time import clock
 from cv2 import CAP_PROP_FRAME_HEIGHT, CAP_PROP_FRAME_WIDTH
 from cv2 import flip as cv_flip
 from cv2 import VideoCapture as CVCapture, VideoWriter as CVWriter, VideoWriter_fourcc as CVCodec
+
+
+def precise_sleep(last_time, delay: float):
+    while clock() - last_time < delay:
+        pass
 
 
 class FrameBuff(Queue):
@@ -86,16 +90,13 @@ class StreamAndRec:
         return self._stream_status
 
     def _stream(self, delay: float):
-        print('FPS='+str(self._fps))
         while self._stream_status:
             time_start = clock()
             _, _current_frame = self._video_cap.read()
             if self._flip_param:
                 _current_frame = cv_flip(_current_frame, 1)
             self._frame_buffer.put_frame(_current_frame, self._record_status)
-            remain_time = delay-(clock()-time_start)
-            if remain_time > 0:
-                precise_sleep(remain_time)
+            precise_sleep(time_start, delay)
 
     def record_toggle(self):
         from datetime import datetime
