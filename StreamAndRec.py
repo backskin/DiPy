@@ -1,52 +1,60 @@
-from threading import Lock, Thread
-from time import sleep
+from threading import Thread, Lock
+from Lib.queue import Queue
+from time import sleep, clock
+from cv2 import CAP_PROP_FRAME_HEIGHT, CAP_PROP_FRAME_WIDTH
+from cv2 import flip as cv_flip
+from cv2 import VideoCapture as CVCapture, VideoWriter as CVWriter, VideoWriter_fourcc as CVCodec
 
 
-class FrameBuff:
+class FrameBuff(Queue):
     def __init__(self, frame=None):
-        self.frame = frame
-        self.prev_frame = None
-        self.sealed_flag = False
-        self._lock = Lock()
+        super().__init__()
+        self._last_frame = frame
+        self._upd = False
 
-    def sealed(self):
-        return self.sealed_flag
+    def has_new_frame(self):
+        return self._upd
 
-    def get_frame(self):
-        self._lock.acquire()
-        self.sealed_flag = False
-        return (self.frame, self._lock.release())[0]
+    def pop(self):
+        return self.get()
 
-    def get_prev_frame(self):
-        return self.prev_frame
+    def last(self):
+        self._upd = False
+        return self._last_frame
 
-    def set_frame(self, new_frame):
-        self._lock.acquire()
-        self.prev_frame = self.frame
-        self.frame = new_frame
-        self.sealed_flag = True
-        self._lock.release()
+    def put_frame(self, new_frame, queue_on: bool = False):
+        self._last_frame = new_frame
+        self._upd = True
+        if queue_on:
+            self.put(new_frame)
+
+    def has_frames(self):
+        return not self.empty()
+
+    def __flush__(self):
+        self.queue.clear()
+
 
 class StreamAndRec:
     def __init__(self, frame_buff: FrameBuff, fps: int = 25, flip: bool = False):
-        import cv2
-        self._stream_status_param = False
-        self._record_status_param = False
-        self._next_frame_ready = False
+        self._stream_status = False
+        self._record_status = False
+        self._stream_thread = None
+        self._rec_thread = None
+        self._record_file_name = None
         self._flip_param = flip
         self._fps = fps
         self._frame_buffer = frame_buff
-        self._video_cap = cv2.VideoCapture()
+        self._video_cap = CVCapture()
 
     def get_frame_shape(self):
-        import cv2
         self._video_cap.open(0)
-        shape = (self._video_cap.get(cv2.CAP_PROP_FRAME_HEIGHT),
-                 self._video_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        shape = (self._video_cap.get(CAP_PROP_FRAME_HEIGHT),
+                 self._video_cap.get(CAP_PROP_FRAME_WIDTH))
         self._video_cap.release()
         return shape
 
-    def flip(self):
+    def flip_toggle(self):
         self._flip_param = not self._flip_param
 
     def adjust(self, PROP, value):
@@ -58,61 +66,71 @@ class StreamAndRec:
     def set_fps(self, fps: int):
         self._fps = fps
 
-    def _is_frame_ready(self):
-        return self._next_frame_ready
-
     def get_stream_status(self):
-        return self._stream_status_param
+        return self._stream_status
+
+    def get_record_status(self):
+        return self._record_status
 
     def stream_toggle(self):
-        if not self._stream_status_param:
-            self._stream_status_param = True
-            thread_stream = Thread(target=self.stream)
-            thread_stream.start()
+        self._stream_status = not self._stream_status
+        if self._stream_status:
+            delay = 1. / self._fps
+            self._video_cap.open(0)
+            self._stream_thread = Thread(target=self._stream, args=(delay,))
+            self._stream_thread.start()
         else:
-            self._stream_status_param = False
-        return self._stream_status_param
+            self._video_cap.release()
+        return self._stream_status
 
-    def stream(self):
-        import cv2
-        self._video_cap.open(0)
-        while self._stream_status_param and self._video_cap.isOpened():
-            _, current_frame = self._video_cap.read()
+    def _stream(self, _delay: float):
+        while self._stream_status:
+            _, _current_frame = self._video_cap.read()
             if self._flip_param:
-                current_frame = cv2.flip(current_frame, 1)
-            self._frame_buffer.set_frame(current_frame)
-            self._next_frame_ready = True
-            sleep(1. / self._fps)
+                _current_frame = cv_flip(_current_frame, 1)
+            self._frame_buffer.put_frame(_current_frame, self._record_status)
+            if self._stream_status:
+                sleep(_delay)
 
-        self._video_cap.release()
-
-    def record_threaded(self):
-        import threading
-        if not self._record_status_param:
-            self._record_status_param = True
-            rec_thread = threading.Thread(target=self.record)
-            rec_thread.start()
+    def record_toggle(self):
+        from datetime import datetime
+        self._record_status = not self._record_status
+        if self._record_status:
+            h, w, *_ = self._frame_buffer.last().shape
+            self._record_file_name = "record_" + datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_obj = CVWriter(self._record_file_name + '.avi', CVCodec(*'XVID'), self._fps, (w, h))
+            self._rec_thread = Thread(target=self._record, args=(output_obj,))
+            self._rec_thread.start()
+            return None
         else:
-            self._record_status_param = False
+            self._frame_buffer.__flush__()
+            if self._rec_thread is not None and self._rec_thread.is_alive():
+                self._rec_thread.join()
+                print('thread finished!')
+            return self._record_file_name
 
-    def record(self):
-        import datetime
-        import cv2
-        name = "record_" + datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        h, w = self._frame_buffer.get_frame().shape[:2]
-        out = cv2.VideoWriter(name + '.avi', cv2.VideoWriter_fourcc(*'XVID'), self._fps, (w, h))
-
-        while self._stream_status_param and self._record_status_param and self._video_cap.isOpened():
-            if self._next_frame_ready:
-                out.write(self._frame_buffer.get_frame())
-                self._next_frame_ready = False
+    def _record(self, out: CVWriter):
+        i = 0
+        last_time = clock()
+        while self._record_status:
+            if self._frame_buffer.has_frames():
+                i += 1
+                out.write(self._frame_buffer.pop())
+                if i % self._fps == 0:
+                    new_time = clock()
+                    print(str(i)+" frame. period time:"+str(clock()-last_time))
+                    last_time = new_time
+        while self._frame_buffer.has_frames():
+            print('опоздавшие кадры есть!')
+            out.write(self._frame_buffer.pop())
         out.release()
-        print("record '" + name + "' released")
-
-    def stop_record(self):
-        self._record_status_param = False
 
     def close_threads(self):
-        self._stream_status_param = False
-        self._record_status_param = False
         self._video_cap.release()
+        self._stream_status = False
+        self._record_status = False
+        if self._rec_thread is not None and self._rec_thread.is_alive():
+            self._rec_thread.join()
+        if self._stream_thread is not None and self._stream_thread.is_alive():
+            self._stream_thread.join()
+        self._frame_buffer.__flush__()

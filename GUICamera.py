@@ -1,8 +1,14 @@
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
-from threading import Thread, Lock
+from threading import Thread
+from time import sleep
 from StreamAndRec import StreamAndRec, FrameBuff
+from cv2 import imread, addWeighted, CAP_PROP_BRIGHTNESS, CAP_PROP_CONTRAST, \
+    CAP_PROP_SATURATION, CAP_PROP_EXPOSURE, CAP_PROP_GAIN
+from os.path import sep as separator
+
+STANDBY_PICTURE = imread('resources' + separator + 'off.jpg')
 
 
 class MyWidget:
@@ -42,7 +48,7 @@ class Slider(MyWidget):
 
     def build_widget(self, pos: str = 'v', with_desc: bool = False):
         wgt = super().build_widget(pos, with_desc)
-        val_label = QLabel(str(self.widget.value()))
+        val_label = QLabel('0')
         val_label.setAlignment(Qt.AlignCenter)
         self.widget.valueChanged.connect(lambda: val_label.setText(str(self.widget.value())))
         wgt.layout().addWidget(val_label)
@@ -61,12 +67,19 @@ class SpinBox(MyWidget):
 
 
 class AdjustDial(Slider):
-    def __init__(self, description: str, PROP: int, agent: StreamAndRec, bounds: tuple, multip=1, disable=False):
-        dial = QDial()
-        super().__init__(dial, description, bounds)
-        dial.valueChanged.connect(lambda: agent.adjust(PROP, dial.value() * multip))
-        self.reset_value = lambda: self.widget.setValue(agent.get_property(PROP))
+    def __init__(self, description: str, PROP: int, agent: StreamAndRec, bounds: tuple, multip=1, disable=True):
+        self.dial = QDial()
+        self.PROP = PROP
+        self.agent = agent
+        super().__init__(self.dial, description, bounds)
+        self.dial.valueChanged.connect(
+            lambda: self.agent.adjust(self.PROP, self.dial.value() * multip))
+        self._reset_value = lambda: self.dial.setValue(agent.get_property(self.PROP))
         self.widget.setDisabled(disable)
+
+    def reset_and_activate(self):
+        self._reset_value()
+        self.activate(True)
 
 
 class CheckBox(MyWidget):
@@ -78,11 +91,13 @@ class CheckBox(MyWidget):
 
 
 class ComboBox(MyWidget):
-    def __init__(self, items, description='', function=None, disable=False):
-        super().__init__(QComboBox(), description)
-        self.widget.addItems(items)
-        if function is not None:
-            self.widget.currentIndexChanged.connect(lambda: function(int(self.widget.currentText().split()[0])))
+    def __init__(self, items, description='', fnc=None, disable=False):
+        combo = QComboBox()
+        super().__init__(combo, description)
+        combo.addItems(items)
+        if fnc is not None:
+            self.widget.currentIndexChanged.connect(
+                lambda: fnc(int(combo.currentText().split()[0])))
         self.widget.setDisabled(disable)
 
     def set_index(self, index: int):
@@ -97,37 +112,34 @@ class FrameBox(QLabel):
         self.setFixedHeight(np_shape[0])
         self.setFixedWidth(np_shape[1])
         self.setAlignment(Qt.AlignCenter)
-        self.thread_param = False
-
-    def _get_image(self, numpy_picture) -> QImage:
-        return QImage(numpy_picture, numpy_picture.shape[1], numpy_picture.shape[0], QImage.Format_BGR888)
+        self._frame_thread_status = False
+        self._thread = None
+        self.standby()
 
     def show_picture(self, picture: np.ndarray):
-        import cv2
-        height, width, *_ = picture.shape
-        q_img = QImage(picture.data, width, height, QImage.Format_BGR888)
-        # self.setPixmap(QPixmap.convertFromImage(cv2.imencode('.jpg', picture)[1]))
+        q_img = QImage(picture.data, self.width(), self.height(), QImage.Format_BGR888)
         self.setPixmap(QPixmap(q_img.scaled(self.width(), self.height(), Qt.KeepAspectRatio)))
 
-    def start_threaded_update(self, frame_buffer: FrameBuff):
-        thread = Thread(target=self._thread, args=(frame_buffer,))
-        self.thread_param = True
-        thread.start()
+    def _fn_thread(self, frame_buffer: FrameBuff):
+        while self._frame_thread_status:
+            if frame_buffer.has_new_frame():
+                _pic = frame_buffer.last()
+                if _pic is not None:
+                    self.show_picture(_pic)
 
-    def stop_threaded_update(self):
-        self.thread_param = False
+    def connect(self, frame_buffer: FrameBuff):
+        self._frame_thread_status = True
+        self._thread = Thread(target=self._fn_thread, args=(frame_buffer,))
+        self._thread.start()
 
-    def _thread(self, frame_buffer: FrameBuff):
-        while self.thread_param:
-            if frame_buffer.sealed():
-                self.show_picture(frame_buffer.get_frame())
+    def __stop_thread__(self):
+        self._frame_thread_status = False
+        if self._thread is not None and self._thread.is_alive():
+            self._thread.join()
 
-    def show_preview(self, picture):
-        import os
-        import cv2
-        self.stop_threaded_update()
-        prom = cv2.imread('resources' + os.path.sep + 'off.jpg')
-        self.show_picture(cv2.addWeighted(prom, 1., picture, 0.7, 0))
+    def standby(self, image=None):
+        self.__stop_thread__()
+        self.show_picture(addWeighted(STANDBY_PICTURE, 1., image, 0.7, 0) if image is not None else STANDBY_PICTURE)
 
 
 def make_button(name: str, do_something, disable: bool = False, checkable=False):
@@ -138,114 +150,169 @@ def make_button(name: str, do_something, disable: bool = False, checkable=False)
     return button
 
 
-class SmartWindow(QWidget):
-    def __init__(self, title='Window', size: tuple = (960, 560)):
-
+class StatusBar(QWidget):
+    def __init__(self, agent: StreamAndRec):
         super().__init__()
-
-        self.frame_buff = FrameBuff()
-        self.stream_agent = StreamAndRec(self.frame_buff)
-
-        self.dials = []
-        fps_items = ("2 FPS", "3 FPS", "5 FPS", "10 FPS", "12 FPS",
-                     "15 FPS", "20 FPS", "25 FPS", "30 FPS")
-        self.fps_cmbx = ComboBox(fps_items, "FPS setting", self.stream_agent.set_fps, disable=True)
-        self.fps_cmbx.set_index(7)
-        self.flip_chbx = CheckBox("H-Flip", self.stream_agent.flip, disable=True)
-        self.stop_rec_button = make_button("Stop Record", self.stop_record_handler, disable=True)
-        self.start_record_button = make_button("Start Record", self.start_record_handler, disable=True)
-        self.setWindowTitle(title)
-        self.resize(size[0], size[1])
-        self.setFixedWidth(size[0])
-        self.setFixedHeight(size[1])
-
+        self._agent = agent
         self.setLayout(QHBoxLayout())
+        self.status_label = QLabel('Status:')
+        self.line = QLineEdit()
+        self.line.setDisabled(True)
+        self.line.setText('nothing')
+        self.layout().addWidget(self.status_label)
+        self.layout().addWidget(self.line)
+        self.layout().setContentsMargins(0, 0, 0, 0)
+        self._message_state = False
+        self._thread_state = True
+        self._thread = Thread(target=self._start_thread)
+        self._thread.start()
 
-        self.frame_box = FrameBox(self.stream_agent.get_frame_shape())
-        self.layout().addWidget(self.frame_box)
-        self.layout().addWidget(self.make_east_panel())
+    def __stop_thread__(self):
+        self._thread_state = False
+        if self._thread is not None and self._thread.is_alive():
+            self._thread.join()
 
-    def make_east_panel(self):
+    def _start_thread(self):
+        stream_state_to_check = self._agent.get_stream_status()
+        while self._thread_state:
+            stream_updated_status = self._agent.get_stream_status()
+            if self._message_state or not stream_state_to_check == stream_updated_status:
+                if self._message_state:
+                    self._message_state = False
+                    sleep(4)
+                self.line.setText('Streaming is '+('ON' if stream_updated_status else 'OFF'))
+                stream_state_to_check = stream_updated_status
+
+    def message(self, text: str):
+        self._message_state = True
+        self.line.setText(text)
+
+
+class SmartWindow(QWidget):
+    def __init__(self, title='Window'):
+        super().__init__()
+        self.setWindowTitle(title)
+        self._frame_buffer = FrameBuff()
+        self._stream_agent = StreamAndRec(self._frame_buffer)
+        self._adj_dials = []
+
+        layout = QHBoxLayout()
+        layout.setAlignment(Qt.AlignHCenter)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self.setLayout(layout)
+
+        self._frame_box = FrameBox(self._stream_agent.get_frame_shape())
+        self._status_bar = StatusBar(self._stream_agent)
+
+        fps_items = ("2 FPS", "3 FPS", "5 FPS", "10 FPS", "12 FPS",
+                     "15 FPS", "20 FPS", "25 FPS", "30 FPS", "60 FPS")
+        self._fps_combobox = ComboBox(fps_items, "FPS setting", self._stream_agent.set_fps)
+        self._fps_combobox.set_index(7)
+        self._flip_checkbox = CheckBox("H-Flip", self._stream_agent.flip_toggle, disable=True)
+        self.stop_rec_button = make_button("Stop Record", self._record_handler, disable=True)
+        self._start_record_button = make_button("Start Record", self._record_handler, disable=True)
+
+        layout.addWidget(self._make_west_panel())
+        layout.addWidget(self._make_east_panel())
+
+        self.show()
+        self.setFixedSize(self.size())
+        self._status_bar.message('Welcome to Балдында control app!')
+
+    def _make_west_panel(self):
+        west_panel = QWidget()
+        inner_layout = QVBoxLayout()
+        inner_layout.setAlignment(Qt.AlignLeft)
+        inner_layout.setContentsMargins(8, 8, 0, 8)
+        west_panel.setLayout(inner_layout)
+        west_panel.layout().addWidget(self._frame_box)
+        west_panel.layout().addWidget(self._status_bar)
+        return west_panel
+
+    def _make_east_panel(self):
         east_tabs = QTabWidget()
+        east_tabs.setContentsMargins(0, 0, 0, 0)
+        east_tabs.setFixedSize(260, 540)
         east_tabs.setTabPosition(QTabWidget.West)
-        east_tabs.setMinimumWidth(160)
-        east_tabs.setMaximumWidth(260)
-
-        east_tabs.addTab(self.make_control_tab(), "Controls")
-        east_tabs.addTab(self.make_adjust_tab(), "Adjustments")
+        east_tabs.addTab(self._make_control_tab(), "Controls")
+        east_tabs.addTab(self._make_adjust_tab(), "Adjustments")
+        east_tabs.addTab(self._make_detection_tab(), "Detection")
         return east_tabs
 
-    def make_adjust_tab(self):
-        import cv2
+    def _make_adjust_tab(self):
         adjusts = QWidget()
         adjusts.setLayout(QGridLayout())
-        adjusts.setContentsMargins(0,0,0,0)
-        self.dials.append(AdjustDial("Contrast", cv2.CAP_PROP_CONTRAST, self.stream_agent, (25, 115), disable=True))
-        self.dials.append(AdjustDial("Brightness", cv2.CAP_PROP_BRIGHTNESS, self.stream_agent, (95, 225), disable=True))
-        self.dials.append(
-            AdjustDial("Exposure", cv2.CAP_PROP_EXPOSURE, self.stream_agent, (1, 8), multip=-1, disable=True))
-        self.dials.append(AdjustDial("Saturation", cv2.CAP_PROP_SATURATION, self.stream_agent, (0, 255), disable=True))
+        adjusts.layout().setAlignment(Qt.AlignTop)
+        adjusts.setContentsMargins(0, 0, 0, 0)
+        self._adj_dials.append(AdjustDial("Contrast", CAP_PROP_CONTRAST, self._stream_agent, (25, 115)))
+        self._adj_dials.append(AdjustDial("Brightness", CAP_PROP_BRIGHTNESS, self._stream_agent, (95, 225)))
+        self._adj_dials.append(AdjustDial("Exposure", CAP_PROP_EXPOSURE, self._stream_agent, (1, 8), multip=-1))
+        self._adj_dials.append(AdjustDial("Saturation", CAP_PROP_SATURATION, self._stream_agent, (0, 255)))
         # gain is not supported on Raspberry Pi
-        # self.dials.append(AdjustDial("Gain", cv2.CAP_PROP_GAIN, self.stream_agent, (0, 255)))
+        # self.dials.append(AdjustDial("Gain", CAP_PROP_GAIN, self.stream_agent, (0, 255)))
         i, j = 0, 0
-        for dial in self.dials:
+        for dial in self._adj_dials:
             adjusts.layout().addWidget(dial.build_widget(pos='v', with_desc=True), i, j)
             i += j % 2
             j = (j + 1) % 2
         return adjusts
 
-    def make_control_tab(self):
+    def _make_control_tab(self):
 
         control_tab = QWidget()
         control_tab.setLayout(QVBoxLayout())
         control_tab.layout().setAlignment(Qt.AlignTop)
-        button_play_pause = make_button("Play/Pause", self.stream_handler)
+        button_play_pause = make_button("Play/Pause", self._stream_handler)
 
         control_tab.layout().addWidget(button_play_pause)
-        control_tab.layout().addWidget(self.flip_chbx.build_widget())
-        control_tab.layout().addWidget(self.start_record_button)
+        control_tab.layout().addWidget(self._flip_checkbox.build_widget())
+        control_tab.layout().addWidget(self._start_record_button)
         control_tab.layout().addWidget(self.stop_rec_button)
-        control_tab.layout().addWidget(self.fps_cmbx.build_widget(with_desc=True))
+        control_tab.layout().addWidget(self._fps_combobox.build_widget(with_desc=True))
         return control_tab
 
-    def stream_handler(self):
+    def _make_detection_tab(self):
+        detection_tab = QWidget()
+        detection_tab.setLayout(QVBoxLayout())
+        detection_tab.layout().setAlignment(Qt.AlignTop)
 
-        status = self.stream_agent.stream_toggle()
-        self.start_record_button.setDisabled(not status)
-        self.fps_cmbx.activate(status)
-        self.flip_chbx.activate(status)
+        return detection_tab
+
+    def _stream_handler(self):
+        status = self._stream_agent.stream_toggle()
+        self._start_record_button.setDisabled(not status)
+        self._fps_combobox.activate(not status)
+        self._flip_checkbox.activate(status)
         if status:
-            for adj_wgt in self.dials:
-                adj_wgt.activate(True)
-                adj_wgt.reset_value()
-            self.frame_box.start_threaded_update(self.frame_buff)
+            for adj_wgt in self._adj_dials:
+                adj_wgt.reset_and_activate()
+            self._frame_box.connect(self._frame_buffer)
         else:
-            for adj_wgt in self.dials:
+            for adj_wgt in self._adj_dials:
                 adj_wgt.activate(False)
-            self.frame_box.stop_threaded_update()
+            self._frame_box.standby(self._frame_buffer.last())
             self.stop_rec_button.setDisabled(True)
 
-    def start_record_handler(self):
-        self.stream_agent.record_threaded()
-        self.start_record_button.setDisabled(True)
-        self.stop_rec_button.setDisabled(False)
-
-    def stop_record_handler(self):
-        self.stream_agent.stop_record()
-        self.start_record_button.setDisabled(False)
-        self.stop_rec_button.setDisabled(True)
+    def _record_handler(self):
+        string = self._stream_agent.record_toggle()
+        status = self._stream_agent.get_record_status()
+        self._start_record_button.setDisabled(status)
+        self.stop_rec_button.setDisabled(not status)
+        self._flip_checkbox.activate(not status)
+        if string is None:
+            self._status_bar.message('Recording stream to file...')
+        else:
+            self._status_bar.message('Successfully recorded: ' + string)
 
     def closeEvent(self, q_event):
-        self.stream_agent.close_threads()
+        self._stream_agent.close_threads()
+        self._frame_box.__stop_thread__()
+        self._status_bar.__stop_thread__()
 
 
-def main():
-    import sys
-    app = QApplication(sys.argv)
-    window = SmartWindow('Балдында')
-    window.show()
-    sys.exit(app.exec_())
-
-
-if __name__ == '__main__':
-    main()
+class Application:
+    def __init__(self):
+        import sys
+        app = QApplication(sys.argv)
+        window = SmartWindow('Балдында')
+        sys.exit(app.exec_())

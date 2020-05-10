@@ -63,6 +63,7 @@ def make_slider(name: str, left_b, right_b):
     out_widget.setLayout(vbox)
     return slider, out_widget
 
+
 def make_checkbox(name: str, function, disable: bool):
     checkbox = QCheckBox(name)
     checkbox.stateChanged.connect(function)

@@ -10,8 +10,8 @@ def video_stream():
         cv2.imshow("preview", frame)
         if cv2.waitKey(20) == 27:  # exit on ESC
             break
-    cv2.destroyWindow("preview")
     video_cap.release()
+    cv2.destroyWindow("preview")
 
 
 if __name__ == '__main__':
