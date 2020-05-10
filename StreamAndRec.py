@@ -1,6 +1,7 @@
 from threading import Thread, Lock
 from Lib.queue import Queue
-from time import sleep, clock
+from time import clock, sleep
+from backskin_utilites import precise_sleep
 from cv2 import CAP_PROP_FRAME_HEIGHT, CAP_PROP_FRAME_WIDTH
 from cv2 import flip as cv_flip
 from cv2 import VideoCapture as CVCapture, VideoWriter as CVWriter, VideoWriter_fourcc as CVCodec
@@ -80,17 +81,21 @@ class StreamAndRec:
             self._stream_thread = Thread(target=self._stream, args=(delay,))
             self._stream_thread.start()
         else:
+            self._record_status = False
             self._video_cap.release()
         return self._stream_status
 
-    def _stream(self, _delay: float):
+    def _stream(self, delay: float):
+        print('FPS='+str(self._fps))
         while self._stream_status:
+            time_start = clock()
             _, _current_frame = self._video_cap.read()
             if self._flip_param:
                 _current_frame = cv_flip(_current_frame, 1)
             self._frame_buffer.put_frame(_current_frame, self._record_status)
-            if self._stream_status:
-                sleep(_delay)
+            remain_time = delay-(clock()-time_start)
+            if remain_time > 0:
+                precise_sleep(remain_time)
 
     def record_toggle(self):
         from datetime import datetime
@@ -110,16 +115,9 @@ class StreamAndRec:
             return self._record_file_name
 
     def _record(self, out: CVWriter):
-        i = 0
-        last_time = clock()
         while self._record_status:
             if self._frame_buffer.has_frames():
-                i += 1
                 out.write(self._frame_buffer.pop())
-                if i % self._fps == 0:
-                    new_time = clock()
-                    print(str(i)+" frame. period time:"+str(clock()-last_time))
-                    last_time = new_time
         while self._frame_buffer.has_frames():
             print('опоздавшие кадры есть!')
             out.write(self._frame_buffer.pop())

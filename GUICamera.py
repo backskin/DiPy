@@ -6,51 +6,49 @@ from time import sleep
 from StreamAndRec import StreamAndRec, FrameBuff
 from cv2 import imread, addWeighted, CAP_PROP_BRIGHTNESS, CAP_PROP_CONTRAST, \
     CAP_PROP_SATURATION, CAP_PROP_EXPOSURE, CAP_PROP_GAIN
-from os.path import sep as separator
+from os.path import sep as os_sep_
 
-STANDBY_PICTURE = imread('resources' + separator + 'off.jpg')
+STANDBY_PICTURE = imread('resources' + os_sep_ + 'off.jpg')
 
 
 class MyWidget:
     def __init__(self, widget: QWidget, description: str):
         self.name = description
-        self.widget = widget
+        self._widget = widget
+        self.out_widget = None
 
-    def _get_core_widget(self):
-        return self.widget
+    def __widget__(self):
+        return self._widget
 
     def activate(self, state):
-        self.widget.setDisabled(not state)
-
-    def get_name(self):
-        return self.name
+        self._widget.setDisabled(not state)
 
     def build_widget(self, pos: str = 'v', with_desc: bool = False):
         """pos - is 'v' or 'h' """
-        out_widget = QWidget()
+        self.out_widget = QWidget()
         layout = QVBoxLayout() if pos == 'v' else QHBoxLayout()
         if with_desc:
             name_label = QLabel(self.name)
             name_label.setAlignment(Qt.AlignCenter)
             layout.addWidget(name_label)
-        layout.addWidget(self.widget)
+        layout.addWidget(self._widget)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setAlignment(Qt.AlignCenter)
-        out_widget.setLayout(layout)
-        return out_widget
+        self.out_widget.setLayout(layout)
+        return self.out_widget
 
 
 class Slider(MyWidget):
     def __init__(self, widget: QSlider or QDial, description: str, bounds: tuple):
         super().__init__(widget, description)
-        self.widget.setMinimum(bounds[0])
-        self.widget.setMaximum(bounds[1])
+        self._widget.setMinimum(bounds[0])
+        self._widget.setMaximum(bounds[1])
 
     def build_widget(self, pos: str = 'v', with_desc: bool = False):
         wgt = super().build_widget(pos, with_desc)
         val_label = QLabel('0')
-        val_label.setAlignment(Qt.AlignCenter)
-        self.widget.valueChanged.connect(lambda: val_label.setText(str(self.widget.value())))
+        val_label.setAlignment(Qt.AlignHCenter)
+        self._widget.valueChanged.connect(lambda: val_label.setText(str(self._widget.value())))
         wgt.layout().addWidget(val_label)
         return wgt
 
@@ -58,11 +56,11 @@ class Slider(MyWidget):
 class SpinBox(MyWidget):
     def __init__(self, widget: QSpinBox, description: str, bounds: tuple):
         super().__init__(widget, description)
-        self.widget.setMinimum(bounds[0])
-        self.widget.setMaximum(bounds[1])
+        self._widget.setMinimum(bounds[0])
+        self._widget.setMaximum(bounds[1])
 
     def set_operation(self, function):
-        self.widget.valueChanged.connect(function)
+        self._widget.valueChanged.connect(function)
         return self
 
 
@@ -75,7 +73,7 @@ class AdjustDial(Slider):
         self.dial.valueChanged.connect(
             lambda: self.agent.adjust(self.PROP, self.dial.value() * multip))
         self._reset_value = lambda: self.dial.setValue(agent.get_property(self.PROP))
-        self.widget.setDisabled(disable)
+        self._widget.setDisabled(disable)
 
     def reset_and_activate(self):
         self._reset_value()
@@ -86,8 +84,8 @@ class CheckBox(MyWidget):
     def __init__(self, description: str, function=None, disable=False):
         super().__init__(QCheckBox(description), description)
         if function:
-            self.widget.stateChanged.connect(function)
-        self.widget.setDisabled(disable)
+            self._widget.stateChanged.connect(function)
+        self._widget.setDisabled(disable)
 
 
 class ComboBox(MyWidget):
@@ -96,12 +94,12 @@ class ComboBox(MyWidget):
         super().__init__(combo, description)
         combo.addItems(items)
         if fnc is not None:
-            self.widget.currentIndexChanged.connect(
+            self._widget.currentIndexChanged.connect(
                 lambda: fnc(int(combo.currentText().split()[0])))
-        self.widget.setDisabled(disable)
+        self._widget.setDisabled(disable)
 
     def set_index(self, index: int):
-        self._get_core_widget().setCurrentIndex(index)
+        self.__widget__().setCurrentIndex(index)
 
 
 class FrameBox(QLabel):
@@ -203,12 +201,14 @@ class SmartWindow(QWidget):
 
         self._frame_box = FrameBox(self._stream_agent.get_frame_shape())
         self._status_bar = StatusBar(self._stream_agent)
-
-        fps_items = ("2 FPS", "3 FPS", "5 FPS", "10 FPS", "12 FPS",
-                     "15 FPS", "20 FPS", "25 FPS", "30 FPS", "60 FPS")
+        self._pack_fps_and_flip = QWidget()
+        self._pack_fps_and_flip.setLayout(QHBoxLayout())
+        fps_items = ("2 FPS", "3 FPS", "4 FPS", "6 FPS", "12 FPS")
         self._fps_combobox = ComboBox(fps_items, "FPS setting", self._stream_agent.set_fps)
-        self._fps_combobox.set_index(7)
+        self._fps_combobox.set_index(len(fps_items)-1)
         self._flip_checkbox = CheckBox("H-Flip", self._stream_agent.flip_toggle, disable=True)
+        self._pack_fps_and_flip.layout().addWidget(self._fps_combobox.build_widget('v', with_desc=True))
+        self._pack_fps_and_flip.layout().addWidget(self._flip_checkbox.build_widget())
         self.stop_rec_button = make_button("Stop Record", self._record_handler, disable=True)
         self._start_record_button = make_button("Start Record", self._record_handler, disable=True)
 
@@ -241,7 +241,7 @@ class SmartWindow(QWidget):
 
     def _make_adjust_tab(self):
         adjusts = QWidget()
-        adjusts.setLayout(QGridLayout())
+        adjusts.setLayout(QVBoxLayout())
         adjusts.layout().setAlignment(Qt.AlignTop)
         adjusts.setContentsMargins(0, 0, 0, 0)
         self._adj_dials.append(AdjustDial("Contrast", CAP_PROP_CONTRAST, self._stream_agent, (25, 115)))
@@ -249,10 +249,19 @@ class SmartWindow(QWidget):
         self._adj_dials.append(AdjustDial("Exposure", CAP_PROP_EXPOSURE, self._stream_agent, (1, 8), multip=-1))
         self._adj_dials.append(AdjustDial("Saturation", CAP_PROP_SATURATION, self._stream_agent, (0, 255)))
         # gain is not supported on Raspberry Pi
-        # self.dials.append(AdjustDial("Gain", CAP_PROP_GAIN, self.stream_agent, (0, 255)))
+        self._adj_dials.append(AdjustDial("Gain", CAP_PROP_GAIN, self._stream_agent, (0, 255)))
         i, j = 0, 0
+        row = None
         for dial in self._adj_dials:
-            adjusts.layout().addWidget(dial.build_widget(pos='v', with_desc=True), i, j)
+            if j == 0:
+                row = QWidget()
+                row.setLayout(QHBoxLayout())
+                if i > 0:
+                    row_sep = QFrame()
+                    row_sep.setFrameShape(QFrame.HLine)
+                    adjusts.layout().addWidget(row_sep)
+                adjusts.layout().addWidget(row)
+            row.layout().addWidget(dial.build_widget(pos='v', with_desc=True))
             i += j % 2
             j = (j + 1) % 2
         return adjusts
@@ -265,10 +274,9 @@ class SmartWindow(QWidget):
         button_play_pause = make_button("Play/Pause", self._stream_handler)
 
         control_tab.layout().addWidget(button_play_pause)
-        control_tab.layout().addWidget(self._flip_checkbox.build_widget())
+        control_tab.layout().addWidget(self._pack_fps_and_flip)
         control_tab.layout().addWidget(self._start_record_button)
         control_tab.layout().addWidget(self.stop_rec_button)
-        control_tab.layout().addWidget(self._fps_combobox.build_widget(with_desc=True))
         return control_tab
 
     def _make_detection_tab(self):
