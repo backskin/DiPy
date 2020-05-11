@@ -1,5 +1,4 @@
 from threading import Thread, Lock
-from Lib.queue import Queue
 from time import clock, sleep
 from cv2 import CAP_PROP_FRAME_HEIGHT, CAP_PROP_FRAME_WIDTH
 from cv2 import flip as cv_flip
@@ -11,9 +10,10 @@ def precise_sleep(last_time, delay: float):
         sleep(delay - (clock() - last_time))
 
 
-class FrameBuff(Queue):
+class FrameBuff:
     def __init__(self, frame=None):
         super().__init__()
+        self._queue = []
         self._last_frame = frame
         self._upd = False
 
@@ -21,7 +21,7 @@ class FrameBuff(Queue):
         return self._upd
 
     def pop(self):
-        return self.get()
+        return self._queue.pop(0)
 
     def last(self):
         self._upd = False
@@ -31,13 +31,13 @@ class FrameBuff(Queue):
         self._last_frame = new_frame
         self._upd = True
         if queue_on:
-            self.put(new_frame)
+            self._queue.append(new_frame)
 
     def has_frames(self):
-        return not self.empty()
+        return len(self._queue) > 0
 
     def __flush__(self):
-        self.queue.clear()
+        self._queue.clear()
 
 
 class StreamAndRec:
@@ -96,7 +96,7 @@ class StreamAndRec:
             if self._flip_param:
                 _current_frame = cv_flip(_current_frame, 1)
             self._frame_buffer.put_frame(_current_frame, self._record_status)
-            precise_sleep(time_start, delay-0.005)
+            precise_sleep(time_start, delay)
 
     def record_toggle(self):
         from datetime import datetime

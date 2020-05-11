@@ -24,7 +24,7 @@ class MyWidget:
         self._widget.setDisabled(self._widget.isEnabled() if state is None else not state)
 
     def build_widget(self, pos: str = 'v', with_desc: bool = False):
-        """pos - is 'v' or 'h' """
+        """pos - is 'v' for vertical or 'h' for horizontal """
         self.out_widget = QWidget()
         layout = QVBoxLayout() if pos == 'v' else QHBoxLayout()
         if with_desc:
@@ -43,13 +43,17 @@ class Slider(MyWidget):
         super().__init__(widget, description)
         self._widget.setMinimum(bounds[0])
         self._widget.setMaximum(bounds[1])
+        self._val_label = QLabel('0')
+        self._val_label.setAlignment(Qt.AlignHCenter)
+
+    def __reconnect__(self):
+        function = lambda: self._val_label.setText(str(self._widget.value()))
+        self._widget.valueChanged.connect(function)
 
     def build_widget(self, pos: str = 'v', with_desc: bool = False):
         wgt = super().build_widget(pos, with_desc)
-        val_label = QLabel('0')
-        val_label.setAlignment(Qt.AlignHCenter)
-        self._widget.valueChanged.connect(lambda: val_label.setText(str(self._widget.value())))
-        wgt.layout().addWidget(val_label)
+        wgt.layout().addWidget(self._val_label)
+        self.__reconnect__()
         return wgt
 
 
@@ -65,21 +69,22 @@ class SpinBox(MyWidget):
 
 
 class AdjustDial(Slider):
-    def __init__(self, description: str, PROP: int, agent: StreamAndRec, bounds: tuple, multip=1, disable=True):
+    def __init__(self, description: str, PROP: int, agent: StreamAndRec, bounds: tuple, mul=1, disable=True):
         self._dial = QDial()
         self._PROP = PROP
-        self._agent = agent
         super().__init__(self._dial, description, bounds)
-        self._dial.valueChanged.connect(
-            lambda: self._agent.adjust(self._PROP, self._dial.value() * multip))
-        self._reset_value = lambda: self._dial.setValue(agent.get_property(self._PROP))
         self._widget.setDisabled(disable)
+        self._function = lambda: agent.adjust(PROP, self._dial.value() * mul)
+        self._reset_value = lambda: self._dial.setValue(agent.get_property(PROP)*mul)
 
     def reinit_prop(self):
-        self._agent.adjust(self._PROP, self._dial.value())
+        self._function()
 
     def reset(self):
+        self._dial.valueChanged.disconnect()
+        self.__reconnect__()
         self._reset_value()
+        self._dial.valueChanged.connect(self._function)
 
 
 class CheckBox(MyWidget):
@@ -266,7 +271,7 @@ class SmartWindow(QWidget):
         adjusts.layout().setAlignment(Qt.AlignTop)
         adjusts.setContentsMargins(0, 0, 0, 0)
 
-        self._adj_dials.append(AdjustDial("Exposure", CAP_PROP_EXPOSURE, self._stream_agent, (1, 8), multip=-1))
+        self._adj_dials.append(AdjustDial("Exposure", CAP_PROP_EXPOSURE, self._stream_agent, (1, 8), mul=-1))
         self._adj_dials.append(AdjustDial("Contrast", CAP_PROP_CONTRAST, self._stream_agent, (25, 115)))
         self._adj_dials.append(AdjustDial("Brightness", CAP_PROP_BRIGHTNESS, self._stream_agent, (95, 225)))
         self._adj_dials.append(AdjustDial("Saturation", CAP_PROP_SATURATION, self._stream_agent, (0, 255)))
@@ -330,7 +335,9 @@ class SmartWindow(QWidget):
         for adj_wgt in self._adj_dials:
             if self._adjs_checkbox.state():
                 adj_wgt.reinit_prop()
+                pass
             else:
+                pass
                 adj_wgt.toggle(status)
                 adj_wgt.reset()
 
