@@ -91,6 +91,15 @@ class CheckBox(MyWidget):
         self._widget.stateChanged.connect(function)
 
 
+class RadioButton(MyWidget):
+    def __init__(self, description: str, function=None, flag: FlagSignal = None, disable=False):
+        super().__init__(QRadioButton(description), description)
+        if function:
+            self._widget.stateChanged.connect(function)
+        self._widget.setDisabled(disable)
+
+
+
 class ComboBox(MyWidget):
     def __init__(self, items, description='', fnc=None, disable=False):
         combo = QComboBox()
@@ -277,6 +286,15 @@ class DetectionTab(QWidget):
         self._agent = agent
         self.setLayout(QVBoxLayout())
         self.layout().setAlignment(Qt.AlignTop)
+        self._turn_on_secur_checkbox = CheckBox('Turn On Security')
+        self.layout().addWidget(self._turn_on_secur_checkbox.build_widget())
+        row_sep = QFrame()
+        row_sep.setFrameShape(QFrame.HLine)
+        self.layout().addWidget(row_sep)
+        self._movement_stroke_checkbox = CheckBox('Stroke movement')
+        self.layout().addWidget(self._movement_stroke_checkbox.build_widget())
+        self._human_detect_radio = RadioButton('Detect humans')
+        self.layout().addWidget(self._human_detect_radio.build_widget())
 
 
 class SmartWindow(QWidget):

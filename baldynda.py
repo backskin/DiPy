@@ -184,9 +184,9 @@ class SmartWindow(QWidget):
         self.stroke_human_checkbox = make_checkbox("Stroke Humans", self.stroke_human_view, disable=True)
         second_col.addWidget(self.stroke_human_checkbox)
 
-        self.area_param = 777
+        self.area_param = 18000
         max_area = self.avail_frame.shape[0] * self.avail_frame.shape[1]
-        area_w, self.area_spinbox = make_spinbox("Min.Area (pixels):", self.set_min_area, 9, max_area, 777)
+        area_w, self.area_spinbox = make_spinbox("Min.Area (pixels):", self.set_min_area, 9, max_area, 18000)
 
         second_col.addWidget(area_w)
         self.adjust_panel.addLayout(second_col)
