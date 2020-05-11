@@ -262,8 +262,8 @@ class AdjustTab(QWidget):
             j = (j + 1) % 2
 
     def toggle_dials(self, state: bool = False):
-        for dial in self._adj_dials:
-            dial.toggle(state)
+            for dial in self._adj_dials:
+                dial.toggle(state and not self._adjs_checkbox.state())
 
     def reset_dials(self, not_passed=False):
         if not_passed and not self._adjs_checkbox.state():
