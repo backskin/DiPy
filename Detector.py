@@ -7,6 +7,9 @@ import numpy as np
 from tflite_runtime.interpreter import Interpreter as tf_interprt
 from PIL import Image
 
+def draw_mvm_stroke(image1, image2):
+    pass
+
 
 def get_output_tensor(interpreter, index):
     """Returns the output tensor at the given index."""

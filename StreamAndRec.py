@@ -1,13 +1,45 @@
-from threading import Thread, Lock
+from threading import Thread
 from time import clock, sleep
 from cv2 import CAP_PROP_FRAME_HEIGHT, CAP_PROP_FRAME_WIDTH
-from cv2 import flip as cv_flip
+from cv2 import flip as cv_flip, imread, cvtColor, COLOR_BGR2RGB
 from cv2 import VideoCapture as CVCapture, VideoWriter as CVWriter, VideoWriter_fourcc as CVCodec
+from PyQt5.QtCore import QObject, pyqtSignal, pyqtBoundSignal
+
+
+def load_picture(path: str):
+    img = imread(path)
+    img = cvtColor(img, COLOR_BGR2RGB)
+    return img
 
 
 def precise_sleep(last_time, delay: float):
     if clock() - last_time < delay:
         sleep(delay - (clock() - last_time))
+
+
+class FlagSignal(QObject):
+    _signal = pyqtSignal()
+
+    def __init__(self, def_val: bool = False):
+        super().__init__()
+        self._val = def_val
+
+    def set(self, val: bool):
+        if val != self._val:
+            self._val = val
+            self._signal.emit()
+
+    def toggle(self):
+        self.set(not self.value())
+
+    def value(self):
+        return self._val
+
+    def connect_(self, function):
+        self._signal.connect(function)
+
+    def disconnect_(self):
+        self._signal.disconnect()
 
 
 class FrameBuff:
@@ -17,7 +49,7 @@ class FrameBuff:
         self._last_frame = frame
         self._upd = False
 
-    def has_new_frame(self):
+    def isUpdated(self):
         return self._upd
 
     def pop(self):
@@ -25,7 +57,10 @@ class FrameBuff:
 
     def last(self):
         self._upd = False
-        return self._last_frame
+        if self._last_frame is None:
+            return None
+        else:
+            return cvtColor(self._last_frame, COLOR_BGR2RGB)
 
     def put_frame(self, new_frame, queue_on: bool = False):
         self._last_frame = new_frame
@@ -41,22 +76,30 @@ class FrameBuff:
 
 
 class StreamAndRec:
-    def __init__(self, frame_buff: FrameBuff, fps: int = 25, flip: bool = False):
-        self._stream_status = False
-        self._record_status = False
+    def __init__(self, fps: int = 25, flip: bool = False):
+        self._stream_status = FlagSignal()
+        self._record_status = FlagSignal()
         self._stream_thread = None
         self._rec_thread = None
         self._record_file_name = None
         self._flip_param = flip
         self._fps = fps
-        self._frame_buffer = frame_buff
+        self._frame_buffer = FrameBuff()
         self._video_cap = CVCapture()
 
+    def get_frame_buff(self):
+        return self._frame_buffer
+
     def get_frame_shape(self):
-        self._video_cap.open(0)
-        shape = (self._video_cap.get(CAP_PROP_FRAME_HEIGHT),
-                 self._video_cap.get(CAP_PROP_FRAME_WIDTH))
-        self._video_cap.release()
+        if self._video_cap.isOpened():
+            shape = (self._video_cap.get(CAP_PROP_FRAME_HEIGHT),
+                     self._video_cap.get(CAP_PROP_FRAME_WIDTH))
+        else:
+            self._video_cap.open(0)
+            shape = (self._video_cap.get(CAP_PROP_FRAME_HEIGHT),
+                     self._video_cap.get(CAP_PROP_FRAME_WIDTH))
+            self._video_cap.release()
+
         return shape
 
     def flip_toggle(self):
@@ -78,44 +121,46 @@ class StreamAndRec:
         return self._record_status
 
     def stream_toggle(self):
-        self._stream_status = not self._stream_status
-        if self._stream_status:
+        if not self._stream_status.value():
             delay = 1. / self._fps
             self._video_cap.open(0)
             self._stream_thread = Thread(target=self._stream, args=(delay,))
+            self._stream_status.set(True)
             self._stream_thread.start()
         else:
-            self._record_status = False
+            self._stream_status.set(False)
             self._video_cap.release()
-        return self._stream_status
+        return self._stream_status.value()
 
     def _stream(self, delay: float):
-        while self._stream_status:
+        while self._stream_status.value():
             time_start = clock()
-            _, _current_frame = self._video_cap.read()
+            _current_frame = self._video_cap.read()[1]
             if self._flip_param:
                 _current_frame = cv_flip(_current_frame, 1)
-            self._frame_buffer.put_frame(_current_frame, self._record_status)
-            precise_sleep(time_start, delay)
+            if self._stream_status.value():
+                self._frame_buffer.put_frame(_current_frame, self._record_status.value())
+                precise_sleep(time_start, delay)
 
     def record_toggle(self):
         from datetime import datetime
-        self._record_status = not self._record_status
-        if self._record_status:
+        if not self._record_status.value():
             h, w, *_ = self._frame_buffer.last().shape
             self._record_file_name = "record_" + datetime.now().strftime("%Y%m%d_%H%M%S")
             output_obj = CVWriter(self._record_file_name + '.avi', CVCodec(*'XVID'), self._fps, (w, h))
             self._rec_thread = Thread(target=self._record, args=(output_obj,))
+            self._record_status.set(True)
             self._rec_thread.start()
             return None
         else:
+            self._record_status.set(False)
             self._frame_buffer.__flush__()
             if self._rec_thread is not None and self._rec_thread.is_alive():
                 self._rec_thread.join()
             return self._record_file_name
 
     def _record(self, out: CVWriter):
-        while self._record_status:
+        while self._record_status.value():
             if self._frame_buffer.has_frames():
                 out.write(self._frame_buffer.pop())
         while self._frame_buffer.has_frames():
@@ -124,11 +169,11 @@ class StreamAndRec:
         out.release()
 
     def close_threads(self):
-        self._video_cap.release()
-        self._stream_status = False
-        self._record_status = False
         if self._rec_thread is not None and self._rec_thread.is_alive():
+            self._record_status.set(False)
             self._rec_thread.join()
         if self._stream_thread is not None and self._stream_thread.is_alive():
+            self._stream_status.set(False)
             self._stream_thread.join()
         self._frame_buffer.__flush__()
+        self._video_cap.release()
