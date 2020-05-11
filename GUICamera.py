@@ -129,7 +129,7 @@ class FrameBox(QLabel):
         self.standby()
 
     def show_picture(self, picture: np.ndarray):
-        q_img = QImage(picture.data, self.width(), self.height(), QImage.Format_BGR888)
+        q_img = QImage(picture.data, self.width(), self.height(), QImage.Format_RGB32)
         self.setPixmap(QPixmap(q_img.scaled(self.width(), self.height(), Qt.KeepAspectRatio)))
 
     def _fn_thread(self, frame_buffer: FrameBuff):
