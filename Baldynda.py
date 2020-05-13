@@ -1,9 +1,7 @@
 import os.path
 import sys
 
-from PyQt5.QtCore import *
-from PyQt5.QtGui import *
-from PyQt5.QtWidgets import *
+from gui import *
 
 from processors import RecorderProcessor, Streamer, load_picture, \
     BoolSignal, FrameSignal, ProcessorManager, RGBProcessor, MovementProcessor
@@ -13,143 +11,14 @@ from cv2 import addWeighted, CAP_PROP_BRIGHTNESS, CAP_PROP_CONTRAST, \
 STANDBY_PICTURE = load_picture('resources' + os.path.sep + 'off.jpg')
 
 
-class MyWidget:
-    def __init__(self, widget: QWidget, description: str):
-        self.name = description
-        self._widget = widget
-        self.out_widget = None
-
-    def __widget__(self):
-        return self._widget
-
-    def toggle_widget(self, state=None):
-        self._widget.setDisabled(self._widget.isEnabled() if state is None else not state)
-
-    def build_widget(self, pos: str = 'v', with_desc: bool = False):
-        """pos - is 'v' for vertical or 'h' for horizontal """
-        self.out_widget = QWidget()
-        layout = QVBoxLayout() if pos == 'v' else QHBoxLayout()
-        if with_desc:
-            name_label = QLabel(self.name)
-            name_label.setAlignment(Qt.AlignCenter)
-            layout.addWidget(name_label)
-        layout.addWidget(self._widget)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setAlignment(Qt.AlignCenter)
-        self.out_widget.setLayout(layout)
-        return self.out_widget
-
-
-class Slider(MyWidget):
-    def __init__(self, widget: QSlider or QDial, description: str, bounds: tuple):
-        super().__init__(widget, description)
-        self._widget.setMinimum(bounds[0])
-        self._widget.setMaximum(bounds[1])
-        self._val_label = QLabel('0')
-        self._val_label.setAlignment(Qt.AlignHCenter)
-
-    def build_widget(self, pos: str = 'v', with_desc: bool = False):
-        wgt = super().build_widget(pos, with_desc)
-        wgt.layout().addWidget(self._val_label)
-        self._widget.valueChanged.connect(lambda: self._val_label.setText(str(self._widget.value())))
-        return wgt
-
-
-class SpinBox(MyWidget):
-    def __init__(self, widget: QSpinBox, description: str, bounds: tuple):
-        super().__init__(widget, description)
-        self._widget.setMinimum(bounds[0])
-        self._widget.setMaximum(bounds[1])
-
-    def set_operation(self, function):
-        self._widget.valueChanged.connect(function)
-        return self
-
-
-class AdjustDial(Slider):
-    def __init__(self, description: str, PROP: int, agent: Streamer, bounds: tuple, mul=1, disable=True):
-        super().__init__(QDial(), description, bounds)
-        self._widget.setDisabled(disable)
-        self._widget.setValue(agent.get_property(PROP) * mul)
-        self._function = lambda: agent.set_property(PROP, self._widget.value() * mul)
-        self._widget.valueChanged.connect(self._function)
-        self._reset_lambda = lambda: self._widget.setValue(agent.get_property(PROP) * mul)
-
-    def reset(self):
-        self._reset_lambda()
-
-
-class CheckBox(MyWidget):
-    def __init__(self, description: str, function=None, disable=False):
-        super().__init__(QCheckBox(description), description)
-        if function:
-            self._widget.stateChanged.connect(function)
-        self._widget.setDisabled(disable)
-
-    def state(self):
-        return self._widget.checkState()
-
-    def set_fn(self, function):
-        self._widget.stateChanged.connect(function)
-
-
-class RadioButton(MyWidget):
-    def __init__(self, description: str, function=None, disable=False):
-        super().__init__(QRadioButton(description), description)
-        if function:
-            self.set_fn(function)
-        self._widget.setDisabled(disable)
-
-    def state(self):
-        return self._widget.toggled()
-
-    def set_fn(self, function):
-        self._widget.toggled.connect(function)
-
-
-class NumericComboBox(MyWidget):
-    """
-      (Лучше по-русски): это класс выпадающего списка,
-      который содержит числа (можно с подписями величины: руб.; FPS; шт.)
-    """
-
-    def __init__(self, items, description='', fnc=None, disable=False):
-        self._combo = QComboBox()
-        super().__init__(self._combo, description)
-        self._combo.addItems(items)
-        if fnc is not None:
-            self._widget.currentIndexChanged.connect(
-                lambda: fnc(self._get_val()))
-        self._widget.setDisabled(disable)
-
-    def _get_val(self):
-        """
-        Функция, которая возвращает выбранное значение как число
-        :return: 0, если выбран элемент, не являющийся числом
-                 иначе - числовое представление выбранной строки
-        """
-        val = self._combo.currentText().split()[0]
-        if val.isnumeric():
-            return int(val)
-        else:
-            return 0.
-
-    def set_index(self, index: int):
-        self.__widget__().setCurrentIndex(index)
-
-
-class FrameBox(QLabel):
-    import numpy as np
+class FrameBox(ImageBox):
 
     def __init__(self, shape, frame_signal: FrameSignal, stream_signal: BoolSignal = None):
-        super().__init__()
-        self.setFixedSize(shape[0], shape[1])
-        self.setAlignment(Qt.AlignCenter)
+        super().__init__(shape, STANDBY_PICTURE)
         self._frame_signal = frame_signal
         self._stream_signal = stream_signal
         self._frame_signal.connect_(lambda: self.show_picture(self._frame_signal.get()))
         self._stream_signal.connect_(lambda: self._standby_signal(self._stream_signal.value()))
-        self.standby()
 
     def _standby_signal(self, state):
         if not state:
@@ -164,10 +33,6 @@ class FrameBox(QLabel):
         self._stream_signal.disconnect()
         self._stream_signal = new_stream_signal
         self._stream_signal.connect_(lambda: self._standby_signal(self._stream_signal.value()))
-
-    def show_picture(self, picture: np.ndarray):
-        q_img = QImage(picture.data, self.width(), self.height(), QImage.Format_RGB888)
-        self.setPixmap(QPixmap(q_img))
 
     def standby(self):
         self.show_picture(STANDBY_PICTURE)
@@ -184,20 +49,6 @@ def make_button(name: str, do_something=None, disable: bool = False):
     return button
 
 
-class StatusBar(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.setLayout(QHBoxLayout())
-        self._line = QLineEdit()
-        self._line.setDisabled(True)
-        self._line.setText('nothing')
-        self.layout().setContentsMargins(0, 0, 0, 0)
-        self.layout().addWidget(self._line)
-
-    def message(self, text: str):
-        self._line.setText(text)
-
-
 class ControlTab(QWidget):
     def __init__(self, status_bar: StatusBar, streamer: Streamer, manager: ProcessorManager):
         super().__init__()
@@ -208,10 +59,14 @@ class ControlTab(QWidget):
         self._status_bar = status_bar
         self.setLayout(QVBoxLayout())
         self.layout().setAlignment(Qt.AlignTop)
-        self._button_play = make_button("Play Stream")
-        self._button_pause = make_button("Pause Stream", disable=True)
-        self._button_play.clicked.connect(streamer.get_signal().toggle)
-        self._button_pause.clicked.connect(streamer.get_signal().toggle)
+        self._button_play = Button("Play Stream")
+        self._button_play.set_function(streamer.get_signal().toggle)
+        self._button_pause = Button("Pause Stream", disable=True)
+        self._button_pause.set_function(streamer.get_signal().toggle)
+        self._start_rec_button = Button("Start Record", disable=True)
+        self._start_rec_button.set_function(lambda: self._add_recorder(manager=manager))
+        self._stop_rec_button = Button("Stop Record", disable=True)
+        self._stop_rec_button.set_function(lambda: self._remove_recorder(manager=manager))
 
         checks = QWidget()
         checks.setLayout(QVBoxLayout())
@@ -226,12 +81,6 @@ class ControlTab(QWidget):
         checks.layout().addWidget(self._flip_checkbox.build_widget())
         checks.layout().addWidget(self._raw_rec_checkbox.build_widget())
 
-        self._stop_rec_button = make_button("Stop Record", disable=True)
-        self._start_rec_button = make_button("Start Record", disable=True)
-
-        self._start_rec_button.clicked.connect(lambda: self._add_recorder(manager=manager))
-        self._stop_rec_button.clicked.connect(lambda: self._remove_recorder(manager=manager))
-
         self.layout().addWidget(self._button_play)
         self.layout().addWidget(self._button_pause)
         self.layout().addWidget(self._fps_combobox.build_widget(with_desc=True))
@@ -240,14 +89,14 @@ class ControlTab(QWidget):
         self.layout().addWidget(self._stop_rec_button)
 
     def _stream_handler(self, state: bool):
-        if self._stop_rec_button.isEnabled():
+        if self._stop_rec_button.is_enabled():
             self._stop_rec_button.click()
 
         self._status_bar.message('Streaming is ' + ('ON' if state else 'OFF'))
-        self._button_play.setDisabled(state)
-        self._button_pause.setDisabled(not state)
-        self._start_rec_button.setDisabled(not state)
-        self._stop_rec_button.setDisabled(True)
+        self._button_play.toggle_widget(state)
+        self._button_pause.toggle_widget(not state)
+        self._start_rec_button.toggle_widget(not state)
+        self._stop_rec_button.toggle_widget(True)
         self._fps_combobox.toggle_widget(not state)
         self._rgb_checkbox.toggle_widget(state)
         self._flip_checkbox.toggle_widget(state)
@@ -296,17 +145,33 @@ class AdjustTab(QWidget):
 
         stream_signal.connect_(self._adjs_checkbox.toggle_widget)
         stream_signal.connect_(lambda: self.toggle_dials(stream_signal.value()))
-        self._adjs_checkbox.set_fn(lambda: self.toggle_dials(not self._adjs_checkbox.state()))
+        self._adjs_checkbox.set_function(lambda: self.toggle_dials(not self._adjs_checkbox.state()))
         self.layout().addWidget(self._adjs_checkbox.build_widget(pos='h'))
         self.layout().setAlignment(Qt.AlignTop)
         self.setContentsMargins(0, 0, 0, 0)
+        # добавление крутилок, настраивающих _саму_камеру_ (т.е. не эффекты, а свойства камеры/медиа)
         self._adj_dials = []
-        self._adj_dials.append(AdjustDial("Exposure", CAP_PROP_EXPOSURE, streamer, (1, 8), mul=-1))
-        self._adj_dials.append(AdjustDial("Contrast", CAP_PROP_CONTRAST, streamer, (25, 115)))
-        self._adj_dials.append(AdjustDial("Brightness", CAP_PROP_BRIGHTNESS, streamer, (95, 225)))
-        self._adj_dials.append(AdjustDial("Saturation", CAP_PROP_SATURATION, streamer, (0, 255)))
+        expo_dial = Dial("Exposure", (1, 8))
+        expo_dial.define_resetter(lambda: -1 * streamer.get_property(CAP_PROP_EXPOSURE))
+        expo_dial.link_value(lambda val: streamer.set_property(CAP_PROP_EXPOSURE, -1 * val))
+        self._adj_dials.append(expo_dial)
+        cont_dial = Dial("Contrast", (25, 115))
+        cont_dial.define_resetter(lambda: streamer.get_property(CAP_PROP_CONTRAST))
+        cont_dial.link_value(lambda val: streamer.set_property(CAP_PROP_CONTRAST, val))
+        self._adj_dials.append(cont_dial)
+        bright_dial = Dial("Brightness", (95, 225))
+        bright_dial.define_resetter(lambda: streamer.get_property(CAP_PROP_BRIGHTNESS))
+        bright_dial.link_value(lambda val: streamer.set_property(CAP_PROP_BRIGHTNESS, val))
+        self._adj_dials.append(bright_dial)
+        satur_dial = Dial("Saturation", (0, 255))
+        satur_dial.define_resetter(lambda: streamer.get_property(CAP_PROP_SATURATION))
+        satur_dial.link_value(lambda val: streamer.set_property(CAP_PROP_SATURATION, val))
+        self._adj_dials.append(satur_dial)
         # gain is not supported on Raspberry Pi
-        self._adj_dials.append(AdjustDial("Gain", CAP_PROP_GAIN, streamer, (0, 255)))
+        # gain_dial = Dial("Gain", (0, 255))
+        # gain_dial.define_resetter(lambda: streamer.get_property(CAP_PROP_GAIN))
+        # gain_dial.link_value(lambda val: streamer.set_property(CAP_PROP_GAIN, val))
+        # self._adj_dials.append(gain_dial)
         i, j = 0, 0
         row = None
         for dial in self._adj_dials:
@@ -341,10 +206,10 @@ class DetectionTab(QWidget):
         row_sep.setFrameShape(QFrame.HLine)
         self._mvm_processor = None
         self.layout().addWidget(row_sep)
-        self._movement_stroke_radio = RadioButton('Stroke movement')
-        self._movement_stroke_radio.set_fn(lambda: self.toggle_mvm_processor(manager))
+        self._movement_stroke_radio = CheckBox('Stroke movement')
+        self._movement_stroke_radio.set_function(lambda: self.toggle_mvm_processor(manager))
         self.layout().addWidget(self._movement_stroke_radio.build_widget())
-        self._human_detect_radio = RadioButton('Detect humans')
+        self._human_detect_radio = CheckBox('Detect humans')
         self.layout().addWidget(self._human_detect_radio.build_widget())
 
     def toggle_mvm_processor(self, manager: ProcessorManager):

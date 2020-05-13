@@ -1,4 +1,3 @@
-import os.path
 from datetime import datetime
 from threading import Thread
 from time import clock, sleep
@@ -144,6 +143,7 @@ class MovementProcessor(ImageProcessor):
             rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
             putText(frame, "Movement", (x, y), FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
         return frame
+
 
 class ProcessorManager:
     def __init__(self):
