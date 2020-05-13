@@ -1,7 +1,7 @@
 import os.path
 import sys
 
-from gui import *
+from gui import ImageBox, StatusBar, Button,
 
 from processors import RecorderProcessor, Streamer, load_picture, \
     BoolSignal, FrameSignal, ProcessorManager, RGBProcessor, MovementProcessor
@@ -52,12 +52,11 @@ def make_button(name: str, do_something=None, disable: bool = False):
 class ControlTab(QWidget):
     def __init__(self, status_bar: StatusBar, streamer: Streamer, manager: ProcessorManager):
         super().__init__()
-        self._streamer = streamer
         streamer.get_signal().connect_(lambda: self._stream_handler(streamer.get_signal().value()))
         self._rec_processor = None
         self._rgb_processor = None
         self._status_bar = status_bar
-        self.setLayout(QVBoxLayout())
+        self.setLayout()
         self.layout().setAlignment(Qt.AlignTop)
         self._button_play = Button("Play Stream")
         self._button_play.set_function(streamer.get_signal().toggle)
@@ -73,20 +72,22 @@ class ControlTab(QWidget):
         fps_items = ("2 FPS", "3 FPS", "4 FPS", "6 FPS", "12 FPS", "16 FPS", "24 FPS", "Maximum")
         self._fps_combobox = NumericComboBox(fps_items, "FPS setting", streamer.set_fps)
         self._fps_combobox.set_index(len(fps_items) - 2 if len(fps_items) > 2 else 0)
-        self._rgb_checkbox = CheckBox("Fix RGB", lambda: self._toggle_rgb_fix(manager), disable=True)
-        self._flip_checkbox = CheckBox("H-Flip", streamer.flip_toggle, disable=True)
+        self._rgb_checkbox = CheckBox("Fix RGB", disable=True)
+        self._rgb_checkbox.set_function(lambda: self._toggle_rgb_fix(manager))
+        self._flip_checkbox = CheckBox("H-Flip", disable=True)
+        self._flip_checkbox.set_function(streamer.flip_toggle)
         self._raw_rec_checkbox = CheckBox("Raw Record", disable=True)
 
         checks.layout().addWidget(self._rgb_checkbox.build_widget())
         checks.layout().addWidget(self._flip_checkbox.build_widget())
         checks.layout().addWidget(self._raw_rec_checkbox.build_widget())
 
-        self.layout().addWidget(self._button_play)
-        self.layout().addWidget(self._button_pause)
+        self.layout().addWidget(self._button_play.build_widget())
+        self.layout().addWidget(self._button_pause.build_widget())
         self.layout().addWidget(self._fps_combobox.build_widget(with_desc=True))
         self.layout().addWidget(checks)
-        self.layout().addWidget(self._start_rec_button)
-        self.layout().addWidget(self._stop_rec_button)
+        self.layout().addWidget(self._start_rec_button.build_widget())
+        self.layout().addWidget(self._stop_rec_button.build_widget())
 
     def _stream_handler(self, state: bool):
         if self._stop_rec_button.is_enabled():
@@ -103,7 +104,7 @@ class ControlTab(QWidget):
         self._raw_rec_checkbox.toggle_widget(state)
 
     def _add_recorder(self, manager: ProcessorManager):
-        self._rec_processor = RecorderProcessor(self._streamer.get_fps())
+        self._rec_processor = RecorderProcessor(self._fps_combobox.__get_value__())
 
         if not self._raw_rec_checkbox.state():
             manager.add_module_last(self._rec_processor)
@@ -252,8 +253,8 @@ class SmartWindow(QWidget):
         inner_layout.setContentsMargins(4, 2, 0, 4)
         west_panel.setLayout(inner_layout)
         self._status_bar.message('Welcome to Балдында control app!')
-        west_panel.layout().addWidget(self._frame_box)
-        west_panel.layout().addWidget(self._status_bar)
+        west_panel.layout().addWidget(self._frame_box.build_widget())
+        west_panel.layout().addWidget(self._status_bar.build_widget())
         return west_panel
 
     def _make_east_panel(self):
