@@ -1,10 +1,14 @@
+from threading import Thread
+from time import sleep
+
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QImage, QPixmap
-from PyQt5.QtWidgets import QWidget, QLabel, QLayout, QGridLayout, QVBoxLayout, QHBoxLayout, QTabWidget, QMainWindow, \
-    QSlider, QDial, QPushButton, QCheckBox, QRadioButton, QComboBox, QSpinBox, QLineEdit, QApplication, QAction, QFrame
+from PyQt5.QtWidgets import QWidget, QLabel, QLayout, QGridLayout, QVBoxLayout, QHBoxLayout, \
+    QTabWidget, QMainWindow, QSlider, QDial, QPushButton, QCheckBox, QRadioButton, QComboBox, \
+    QSpinBox, QLineEdit, QApplication, QAction, QFrame
 
 
-class UIElement(QWidget):
+class UIElement:
     """
     Универсальный класс элемента интерфейса. Создан, потому что изначальные классы PyQt
     требуют значительной доработки и к тому же недостаточно интуитивны, легко запутаться
@@ -15,6 +19,7 @@ class UIElement(QWidget):
                         убирает ненужные отступы между элементами
                         все последующие элементы наследуются от него
     """
+
     def __init__(self, widget: QWidget = None, layout: QLayout = None,
                  description: str = None, disable: bool = False):
         """
@@ -24,6 +29,7 @@ class UIElement(QWidget):
         :param disable:
         """
         super().__init__()
+        self._out_widget = QWidget()
         self._widget = widget
         self._layout = QVBoxLayout() if layout is None else layout
         self._layout.setAlignment(Qt.AlignCenter)
@@ -34,18 +40,24 @@ class UIElement(QWidget):
             widget.setContentsMargins(0, 0, 0, 0)
             widget.setDisabled(disable)
             self._layout.addWidget(self._widget)
-        self.setLayout(self._layout)
+        self._out_widget.setLayout(self._layout)
 
-    def toggle_widget(self, state=None):
+    def toggle_element(self, state=None):
         if self._widget is not None:
-            self._widget.setDisabled(
-                self._widget.isEnabled() if state is None else not state)
+            self._widget.setDisabled(self._widget.isEnabled() if state is None else not state)
+
+    def __layout__(self) -> QLayout:
+        return self._out_widget.layout()
+
+    def __widget__(self) -> QWidget:
+        return self._out_widget
 
 
 class Separator(UIElement):
     """
     Separator - класс визуального разделителя элементов (просто полосочка во всю ширину)
     """
+
     def __init__(self, pos='h'):
         """
         :param pos: определить, горизонтальным ('h') или вертикальным ('v') будет
@@ -64,21 +76,20 @@ class ImageBox(UIElement):
     """
     import numpy as np
 
-    def __init__(self, shape, starter_pic: np.ndarray = None):
+    def __init__(self, starter_pic=None):
         super().__init__(widget=QLabel())
-        self._w = shape[0]
-        self._h = shape[1]
-        self._widget.setFixedSize(shape[0], shape[1])
         if starter_pic is not None:
             self.show_picture(starter_pic)
 
     def show_picture(self, picture: np.ndarray):
         """
         Метод, который отображает полученный массив пикселей (формат OpenCV)
-        :param picture: изображение формата OpenCV/cv2
+        :param picture: изображение формата OpenCV/cv2 (numpy.ndarray)
         :return: ничего
         """
-        q_img = QImage(picture.data, self._w, self._h, QImage.Format_RGB888)
+        h, w, channels = picture.shape
+        bytesPerLine = channels * w
+        q_img = QImage(picture.data, w, h, bytesPerLine, QImage.Format_RGB888)
         self._widget.setPixmap(QPixmap(q_img))
 
 
@@ -90,7 +101,7 @@ class AbstractSlider(UIElement):
         self._val_label = QLabel('0')
         self._val_label.setAlignment(Qt.AlignCenter)
         self._def_val_func = lambda: 1
-        self.layout().addWidget(self._val_label)
+        self.__layout__().addWidget(self._val_label)
         self._widget.valueChanged.connect(lambda: self._val_label.setText(str(self._widget.value())))
 
     def define_reset_method(self, func):
@@ -169,6 +180,7 @@ class NumericComboBox(UIElement):
       (Лучше по-русски): это класс выпадающего списка,
       который содержит числа (можно с подписями величины: руб.; FPS; шт.)
     """
+
     def __init__(self, items, description='', fnc=None, disable=False):
         """
         :param items: это перечисление или list(), содержащий элементы выпадающего списка
@@ -212,7 +224,7 @@ class StatusBar(UIElement):
     def __init__(self):
         self._line = QLineEdit()
         super().__init__(self._line, layout=QHBoxLayout())
-        self.layout().setContentsMargins(0, 0, 0, 0)
+        self.__layout__().setContentsMargins(0, 0, 0, 0)
         self._line.setDisabled(True)
         self._line.setText('-')
 
@@ -227,13 +239,17 @@ class TabElement(UIElement):
         """
         super().__init__()
         self._name = name
-        self.layout().setAlignment(Qt.AlignTop)
+        self.__layout__().setAlignment(Qt.AlignTop)
+        self.__layout__().setContentsMargins(24,8,24,0)
+
+    def set_padding(self, left=0, up=0, right=0, bottom=0):
+        self.__layout__().setContentsMargins(left, up, right, bottom)
 
     def __tab_name__(self):
         return self._name
 
     def add_element(self, element: UIElement):
-        self.layout().addWidget(element)
+        self.__layout__().addWidget(element.__widget__())
 
     def add_all(self, *elements):
         for elem in elements:
@@ -244,6 +260,7 @@ class TabManager(UIElement):
     """
     :TabManager - Позволяет отображать вкладки. Настраивается направление вкладок
     """
+
     def __init__(self, tab_pos='u'):
         """
         Creates Widget for tabs management
@@ -261,7 +278,7 @@ class TabManager(UIElement):
         :param tab: a TabElement object, (not QWidget!)
         :return: nothing
         """
-        self._widget.addTab(tab, tab.__tab_name__())
+        self._widget.addTab(tab.__widget__(), tab.__tab_name__())
 
     def set_tabs_position(self, pos: str = 'u'):
         """
@@ -285,6 +302,7 @@ class Layout(UIElement):
              короче, никакой путаницы, на деле в него можно вставлять другие слои _ТАКИМ_ЖЕ_ методом,
              как и все остальные элементы
     """
+
     def __init__(self, layout: QLayout):
         super().__init__(layout=layout)
         self._layout = layout
@@ -292,7 +310,7 @@ class Layout(UIElement):
         self._layout.setContentsMargins(0, 0, 0, 0)
 
     def add_element(self, element: UIElement):
-        self._layout.addWidget(element)
+        self._layout.addWidget(element.__widget__())
 
 
 class HorizontalLayout(Layout):
@@ -310,16 +328,22 @@ class GridLayout(Layout):
         super().__init__(QGridLayout())
 
 
+class FlowLayout(Layout):
+    def __init__(self):
+        from backslib.QFlowLayout import QFlowLayout
+        super().__init__(QFlowLayout())
+
+
 class Window:
-    def __init__(self, title:str):
+    def __init__(self, title: str):
         self._window = QMainWindow()
         self._window.setWindowTitle(title)
         self._menu_bar = self._window.menuBar()
         self._menu_list = {}
         self._status_bar = self._window.statusBar()
 
-    def fix_size(self):
-        self._window.setFixedSize(self._window.width(), self._window.height())
+    # def fix_size(self):
+    #     self._window.setFixedSize(self._window.width(), self._window.height())
 
     def add_menu(self, title: str):
         self._menu_list[title] = self._menu_bar.addMenu(title)
@@ -330,7 +354,7 @@ class Window:
         self._menu_list[menu_title].addAction(action)
 
     def set_main_layout(self, layout: Layout):
-        self._window.setCentralWidget(layout)
+        self._window.setCentralWidget(layout.__widget__())
 
     def message_to_status_bar(self, message: str = 'test'):
         self._status_bar.showMessage(message)
@@ -346,13 +370,16 @@ class Program(QApplication):
     def __init__(self):
         import sys
         super().__init__(sys.argv)
+        self._windows = {}
 
-    def create_window(self, window_title:str='Template Window'):
-        window = Window(window_title)
-        window.show()
-        return window
+    def create_window(self, window_title: str = 'Template Window') -> Window:
+        self._windows[str] = Window(window_title)
+        self._windows[str].show()
+        return self._windows[str]
+
+    def get_window(self, window_title: str):
+        return self._windows[window_title]
 
     def start(self):
         import sys
-        sys.exit(self.exec_())
-
+        sys.exit(self.exec())

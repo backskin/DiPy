@@ -5,10 +5,12 @@ from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 
-from processors import RecordProcessor, Streamer, load_picture, \
-    BoolSignal, FrameSignal, ProcessorManager, RGBProcessor, MovementProcessor
-from cv2 import addWeighted, CAP_PROP_BRIGHTNESS, CAP_PROP_CONTRAST, \
-    CAP_PROP_SATURATION, CAP_PROP_EXPOSURE, CAP_PROP_GAIN
+from backslib.processors import RecordProcessorModule, load_picture, \
+     ProcessorManager, RGBProcessorModule, MovementProcessorModule
+from backslib.signals import BoolSignal, FrameSignal
+from backslib.Player import Streamer
+from cv2 import CAP_PROP_BRIGHTNESS, CAP_PROP_CONTRAST, \
+    CAP_PROP_SATURATION, CAP_PROP_EXPOSURE
 
 STANDBY_PICTURE = load_picture('resources' + os.path.sep + 'off.jpg')
 
@@ -164,7 +166,7 @@ class FrameBox(QLabel):
         self.setAlignment(Qt.AlignCenter)
         self._frame_signal = frame_signal
         self._stream_signal = stream_signal
-        self._frame_signal.connect_(lambda: self.show_picture(self._frame_signal.get()))
+        self._frame_signal.connect_(lambda: self.show_picture(self._frame_signal.picture()))
         self._stream_signal.connect_(lambda: self._standby_signal(self._stream_signal.value()))
         self.standby()
 
@@ -175,7 +177,7 @@ class FrameBox(QLabel):
     def replace_frame_signal(self, new_frame_signal: FrameSignal):
         self._frame_signal.disconnect()
         self._frame_signal = new_frame_signal
-        self._frame_signal.connect_(lambda: self.show_picture(self._frame_signal.get()))
+        self._frame_signal.connect_(lambda: self.show_picture(self._frame_signal.picture()))
 
     def replace_stream_signal(self, new_stream_signal: BoolSignal = None):
         self._stream_signal.disconnect()
@@ -271,7 +273,7 @@ class ControlTab(QWidget):
         self._raw_rec_checkbox.toggle_widget(state)
 
     def _add_recorder(self, manager: ProcessorManager):
-        self._rec_processor = RecordProcessor(self._streamer.get_fps())
+        self._rec_processor = RecordProcessorModule(self._streamer.get_fps())
 
         if not self._raw_rec_checkbox.state():
             manager.add_module_last(self._rec_processor)
@@ -296,7 +298,7 @@ class ControlTab(QWidget):
 
     def _toggle_rgb_fix(self, manager: ProcessorManager):
         if self._rgb_processor is None:
-            self._rgb_processor = RGBProcessor()
+            self._rgb_processor = RGBProcessorModule()
             manager.add_module_last(self._rgb_processor)
         else:
             manager.remove_module(self._rgb_processor)
@@ -382,7 +384,7 @@ class DetectionTab(QWidget):
 
     def toggle_mvm_processor(self, manager: ProcessorManager):
         if self._mvm_processor is None:
-            self._mvm_processor = MovementProcessor()
+            self._mvm_processor = MovementProcessorModule()
             manager.add_module_first(self._mvm_processor)
         else:
             manager.remove_module(self._mvm_processor)
@@ -435,7 +437,7 @@ class SmartWindow(QWidget):
         return east_tabs
 
     def closeEvent(self, q_event):
-        self._streamer.__close_thread__()
+        self._streamer.__close__()
 
 
 def main():

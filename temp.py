@@ -1,6 +1,29 @@
 from PyQt5.QtWidgets import *
 import sys
 
+
+class First(object):
+    def __init__(self):
+        print("first")
+
+
+class Second(First):
+    def __init__(self):
+        super().__init__()
+        print ("second")
+
+
+class Third(First):
+    def __init__(self):
+        super().__init__()
+        print("third")
+
+
+class Fourth(Second, Third):
+    def __init__(self):
+        super().__init__()
+        print("that's it")
+
 class Window(QWidget):
     def __init__(self):
         QWidget.__init__(self)
@@ -28,7 +51,8 @@ class Window(QWidget):
         if radioButton.isChecked():
             print("Country is %s" % (radioButton.country))
 
-app = QApplication(sys.argv)
-screen = Window()
-screen.show()
-sys.exit(app.exec_())
+# app = QApplication(sys.argv)
+# screen = Window()
+# screen.show()
+# sys.exit(app.exec_())
+obj = Fourth()

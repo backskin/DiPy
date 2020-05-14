@@ -1,74 +1,56 @@
-from gui import Program, HorizontalLayout, VerticalLayout, TabManager, TabElement, ImageBox, StatusBar, \
-    Button, CheckBox, Separator, NumericComboBox
-from processors import ProcessorManager, Streamer, FrameSignal, BoolSignal, RGBProcessor, RecordProcessor
-from processors import  load_picture
-import os.path
-from time import sleep
+from backslib.gui import Program, HorizontalLayout, VerticalLayout, TabManager, TabElement, \
+    ImageBox, Button, CheckBox, Separator, NumericComboBox
+from backslib.processors import ProcessorManager, RGBProcessorModule, RecordProcessorModule
+from backslib.processors import load_picture
+from backslib.Player import Streamer
 
-STANDBY_PICTURE = load_picture('resources' + os.path.sep + 'off.jpg')
-
-
-class FrameBox(ImageBox):
-    def __init__(self, shape, frame_signal: FrameSignal, stream_signal: BoolSignal = None):
-        super().__init__(shape, STANDBY_PICTURE)
-        self._frame_signal = frame_signal
-        self._stream_signal = stream_signal
-        self._frame_signal.connect_(lambda: self.show_picture(self._frame_signal.get()))
-        self._stream_signal.connect_(lambda: self._standby_signal(self._stream_signal.value()))
-
-    def _standby_signal(self, state):
-        if not state:
-            self.standby()
-
-    def replace_frame_signal(self, new_frame_signal: FrameSignal):
-        self._frame_signal.disconnect()
-        self._frame_signal = new_frame_signal
-        self._frame_signal.connect_(lambda: self.show_picture(self._frame_signal.get()))
-
-    def replace_stream_signal(self, new_stream_signal: BoolSignal = None):
-        self._stream_signal.disconnect()
-        self._stream_signal = new_stream_signal
-        self._stream_signal.connect_(lambda: self._standby_signal(self._stream_signal.value()))
-
-    def standby(self):
-        self.show_picture(STANDBY_PICTURE)
-        # следующая реализация подлагивает, поэтому я оставил просто отображение картинки "нет сигнала"
-        # image = self._frame_signal.get()
-        # self.show_picture(STANDBY_PICTURE if image is None else addWeighted(STANDBY_PICTURE, 1., image, 0.7, 0))
+STANDBY_PICTURE = load_picture('off.jpg')
 
 
 def main():
     app = Program()
     window = app.create_window("Main Window")
     manager = ProcessorManager()
-    streamer = Streamer(manager)
-    frame_box = FrameBox(streamer.get_shape(), manager.get_frame_signal(), streamer.get_signal())
-    status_bar = StatusBar()
+    streamer = Streamer(manager.catch)
+
+    frame_box = ImageBox(STANDBY_PICTURE)
+    manager.get_frame_signal().connect_(lambda: frame_box.show_picture(manager.get_frame_signal().picture()))
+    streamer.get_stop_signal().connect_(lambda: frame_box.show_picture(STANDBY_PICTURE))
+    # status_bar = StatusBar()
     tabs = TabManager()
     tabs.set_tabs_position(pos='l')
     control_tab = TabElement("Control")
 
     button_play = Button("Play")
     button_pause = Button("Pause", disable=True)
-    button_play.set_function(streamer.get_signal().toggle)
-    button_pause.set_function(streamer.get_signal().toggle)
-    streamer.get_signal().connect_(button_play.toggle_widget)
-    streamer.get_signal().connect_(button_pause.toggle_widget)
+    button_play.set_function(streamer.play)
+    button_pause.set_function(streamer.stop)
+    streamer.get_signal().connect_(button_play.toggle_element)
+    streamer.get_signal().connect_(button_pause.toggle_element)
     separator = Separator()
     fps_items = ("2 FPS", "3 FPS", "4 FPS", "6 FPS", "12 FPS", "16 FPS", "24 FPS", "Maximum")
     fps_combobox = NumericComboBox(fps_items, "FPS setting")
+    fps_combobox.set_index(len(fps_items)-1)
     fps_combobox.send_value_to(streamer.set_fps)
-    rgb_module = RGBProcessor()
+    streamer.get_signal().connect_(fps_combobox.toggle_element)
+    rgb_module = RGBProcessorModule()
     rgb_checkbox = CheckBox("Fix RGB", disable=True)
     rgb_checkbox.set_function(lambda: manager.toggle_module(rgb_module))
+    streamer.get_signal().connect_(rgb_checkbox.toggle_element)
     sec_sep = Separator()
+    recorder = RecordProcessorModule()
     button_start_rec = Button("Start Rec.")
+    button_start_rec.set_function(lambda: manager.add_module_last(recorder))
     button_stop_rec = Button("Stop Rec.")
+    button_stop_rec.set_function(lambda: manager.remove_module(recorder))
+    # recorder.get_play_signal().connect_(lambda: button_start_rec.toggle_element(False))
+    # recorder.get_play_signal().connect_(lambda: button_stop_rec.toggle_element(True))
+    # recorder.get_stop_signal().connect_(lambda: button_stop_rec.toggle_element(False))
 
     control_tab.add_all(button_play, button_pause, separator,
                         fps_combobox, rgb_checkbox, sec_sep,
                         button_start_rec, button_stop_rec)
-
+    control_tab.set_padding(64,8,64,0)
     adjust_tab = TabElement("Adjustments")
     detect_tab = TabElement("Detection")
     tabs.add_tab(control_tab)
