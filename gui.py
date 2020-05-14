@@ -5,7 +5,25 @@ from PyQt5.QtWidgets import QWidget, QLabel, QLayout, QGridLayout, QVBoxLayout, 
 
 
 class UIElement(QWidget):
-    def __init__(self, widget: QWidget = None, layout: QLayout = None, description: str = None, disable: bool = False):
+    """
+    Универсальный класс элемента интерфейса. Создан, потому что изначальные классы PyQt
+    требуют значительной доработки и к тому же недостаточно интуитивны, легко запутаться
+    в Qt-овском нагромождении из виджетов, лэйаутов, item объектов, прочей шелухи.
+    Плюсы этого класса: позволяет отображать подпись над элементом,
+                                  удобно включать/выключать функциональность,
+                        сразу ставит виджет в центр (а не в край, чтоб потом его ещё ровнять)
+                        убирает ненужные отступы между элементами
+                        все последующие элементы наследуются от него
+    """
+    def __init__(self, widget: QWidget = None, layout: QLayout = None,
+                 description: str = None, disable: bool = False):
+        """
+
+        :param widget:
+        :param layout:
+        :param description:
+        :param disable:
+        """
         super().__init__()
         self._widget = widget
         widget.setContentsMargins(0, 0, 0, 0)
@@ -25,6 +43,9 @@ class UIElement(QWidget):
 
 
 class ImageBox(UIElement):
+    """
+    ImageBox - это класс, позволяющий отобразить картинку, изображение в качестве элемента интерфейса
+    """
     import numpy as np
 
     def __init__(self, shape, starter_pic: np.ndarray = None):
@@ -36,6 +57,11 @@ class ImageBox(UIElement):
             self.show_picture(starter_pic)
 
     def show_picture(self, picture: np.ndarray):
+        """
+        Метод, который отображает полученный массив пикселей (формат OpenCV)
+        :param picture: изображение формата OpenCV/cv2
+        :return: ничего
+        """
         q_img = QImage(picture.data, self._w, self._h, QImage.Format_RGB888)
         self._widget.setPixmap(QPixmap(q_img))
 
@@ -180,7 +206,7 @@ class TabElement(UIElement):
 
 class TabManager(UIElement):
     """
-    :TabManager: Handles Tabs. Позволяет отображать вкладки. Настраивается направление вкладок
+    :TabManager - Позволяет отображать вкладки. Настраивается направление вкладок
     """
     def __init__(self, tab_pos='u'):
         """
@@ -220,6 +246,11 @@ class TabManager(UIElement):
 
 
 class Layout(UIElement):
+    """
+    Layout - класс слоя, и, что важно, _также_ являющийся таким же элементом интерфейса,
+             короче, никакой путаницы, на деле в него можно вставлять другие слои _ТАКИМ_ЖЕ_ методом,
+             как и все остальные элементы
+    """
     def __init__(self, layout: QLayout):
         super().__init__(layout=layout)
         self._layout = layout
