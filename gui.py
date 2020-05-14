@@ -1,7 +1,7 @@
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import *
-from PyQt5.QtWidgets import QWidget, QLabel, QLayout, QGridLayout, QVBoxLayout, QHBoxLayout, QTabWidget, \
-    QSlider, QDial, QPushButton, QCheckBox, QRadioButton, QComboBox, QSpinBox, QLineEdit, QApplication, QAction
+from PyQt5.QtGui import QImage, QPixmap
+from PyQt5.QtWidgets import QWidget, QLabel, QLayout, QGridLayout, QVBoxLayout, QHBoxLayout, QTabWidget, QMainWindow, \
+    QSlider, QDial, QPushButton, QCheckBox, QRadioButton, QComboBox, QSpinBox, QLineEdit, QApplication, QAction, QFrame
 
 
 class UIElement(QWidget):
@@ -18,7 +18,6 @@ class UIElement(QWidget):
     def __init__(self, widget: QWidget = None, layout: QLayout = None,
                  description: str = None, disable: bool = False):
         """
-
         :param widget:
         :param layout:
         :param description:
@@ -26,20 +25,37 @@ class UIElement(QWidget):
         """
         super().__init__()
         self._widget = widget
-        widget.setContentsMargins(0, 0, 0, 0)
-        layout.setAlignment(Qt.AlignCenter)
-        widget.setDisabled(disable)
         self._layout = QVBoxLayout() if layout is None else layout
+        self._layout.setAlignment(Qt.AlignCenter)
+        self._layout.setContentsMargins(0, 0, 0, 0)
         if description is not None:
-            self._layout.addWidget(QLabel(self.name), alignment=Qt.AlignCenter)
+            self._layout.addWidget(QLabel(description), alignment=Qt.AlignCenter)
         if widget is not None:
-            self._layout.addWidget(self._widget, alignment=Qt.AlignCenter)
+            widget.setContentsMargins(0, 0, 0, 0)
+            widget.setDisabled(disable)
+            self._layout.addWidget(self._widget)
         self.setLayout(self._layout)
 
     def toggle_widget(self, state=None):
         if self._widget is not None:
             self._widget.setDisabled(
                 self._widget.isEnabled() if state is None else not state)
+
+
+class Separator(UIElement):
+    """
+    Separator - класс визуального разделителя элементов (просто полосочка во всю ширину)
+    """
+    def __init__(self, pos='h'):
+        """
+        :param pos: определить, горизонтальным ('h') или вертикальным ('v') будет
+                    разделитель
+        """
+        layout = QHBoxLayout() if pos == 'h' else QVBoxLayout()
+        line = QFrame()
+        super().__init__(widget=line, layout=layout)
+        line.setFrameShadow(QFrame.Sunken)
+        line.setMidLineWidth(1)
 
 
 class ImageBox(UIElement):
@@ -154,8 +170,14 @@ class NumericComboBox(UIElement):
       который содержит числа (можно с подписями величины: руб.; FPS; шт.)
     """
     def __init__(self, items, description='', fnc=None, disable=False):
+        """
+        :param items: это перечисление или list(), содержащий элементы выпадающего списка
+        :param description: это строчка над списком, вроде как описание
+        :param fnc: функция, которой будут передаваться выбираемые значения (должна содержать один параметр)
+        :param disable: флаг отключения активности элемента
+        """
         self._combo = QComboBox()
-        super().__init__(self._combo, description)
+        super().__init__(widget=self._combo, description=description)
         self._combo.addItems(items)
         if fnc is not None:
             self._widget.currentIndexChanged.connect(
@@ -174,6 +196,14 @@ class NumericComboBox(UIElement):
         else:
             return 0.
 
+    def send_value_to(self, fnc):
+        """
+        Устанавливает функцию, которой будут передаваться выбираемые значения как числа (читай __get_value__())
+        :param fnc:
+        :return:
+        """
+        self._widget.currentIndexChanged.connect(lambda: fnc(self.__get_value__()))
+
     def set_index(self, index: int):
         self._widget.setCurrentIndex(index)
 
@@ -181,7 +211,8 @@ class NumericComboBox(UIElement):
 class StatusBar(UIElement):
     def __init__(self):
         self._line = QLineEdit()
-        super().__init__(self._line)
+        super().__init__(self._line, layout=QHBoxLayout())
+        self.layout().setContentsMargins(0, 0, 0, 0)
         self._line.setDisabled(True)
         self._line.setText('-')
 
@@ -196,12 +227,17 @@ class TabElement(UIElement):
         """
         super().__init__()
         self._name = name
+        self.layout().setAlignment(Qt.AlignTop)
 
     def __tab_name__(self):
         return self._name
 
-    def add_element(self, element: UIElement, with_desc: bool = False):
-        self.out_widget.layout().addWidget(element.build_widget(with_name=with_desc))
+    def add_element(self, element: UIElement):
+        self.layout().addWidget(element)
+
+    def add_all(self, *elements):
+        for elem in elements:
+            self.add_element(elem)
 
 
 class TabManager(UIElement):
@@ -225,9 +261,7 @@ class TabManager(UIElement):
         :param tab: a TabElement object, (not QWidget!)
         :return: nothing
         """
-        self._widget.addTab(
-            tab.build_widget(),
-            tab.__tab_name__())
+        self._widget.addTab(tab, tab.__tab_name__())
 
     def set_tabs_position(self, pos: str = 'u'):
         """
@@ -276,30 +310,36 @@ class GridLayout(Layout):
         super().__init__(QGridLayout())
 
 
-class Window(QWidget):
+class Window:
     def __init__(self, title:str):
-        super().__init__()
-        self.setWindowTitle(title)
-        self._menu_bar = self.menuBar()
+        self._window = QMainWindow()
+        self._window.setWindowTitle(title)
+        self._menu_bar = self._window.menuBar()
         self._menu_list = {}
-        self._status_bar = self.statusBar()
+        self._status_bar = self._window.statusBar()
 
-    def fix_size(self, width, height):
-        self.setFixedSize(width, height)
+    def fix_size(self):
+        self._window.setFixedSize(self._window.width(), self._window.height())
 
     def add_menu(self, title: str):
         self._menu_list[title] = self._menu_bar.addMenu(title)
 
     def add_menu_action(self, menu_title: str, action_name: str, function):
-        action = QAction(action_name, self)
+        action = QAction(text=action_name, parent=self._window)
         action.triggered.connect(function)
         self._menu_list[menu_title].addAction(action)
 
     def set_main_layout(self, layout: Layout):
-        self.setCentralWidget(layout)
+        self._window.setCentralWidget(layout)
 
     def message_to_status_bar(self, message: str = 'test'):
         self._status_bar.showMessage(message)
+
+    def show(self):
+        self._window.show()
+
+    def set_on_close(self, function):
+        self._window.closeEvent = lambda q_event: function()
 
 
 class Program(QApplication):
@@ -311,3 +351,8 @@ class Program(QApplication):
         window = Window(window_title)
         window.show()
         return window
+
+    def start(self):
+        import sys
+        sys.exit(self.exec_())
+

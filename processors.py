@@ -87,7 +87,7 @@ class RGBProcessor(ImageProcessor):
         return None if frame is None else cvtColor(frame, COLOR_BGR2RGB)
 
 
-class RecorderProcessor(ImageProcessor):
+class RecordProcessor(ImageProcessor):
 
     def __init__(self, fps: float = 12.0):
         super().__init__()
@@ -158,6 +158,13 @@ class ProcessorManager:
 
     def add_module_first(self, module: ImageProcessor):
         self._processors.append(module)
+
+    def toggle_module(self, module: ImageProcessor):
+        if module in self._processors:
+            module.finish()
+            self._processors.remove(module)
+        else:
+            self._processors.insert(0, module)
 
     def remove_module(self, module: ImageProcessor):
         if module in self._processors:
