@@ -1,57 +1,37 @@
-from PyQt5.QtCore import *
+from PyQt5.QtCore import Qt
 from PyQt5.QtGui import *
-from PyQt5.QtWidgets import *
-from FlowLayout import FlowLayout
+from PyQt5.QtWidgets import QWidget, QLabel, QLayout, QGridLayout, QVBoxLayout, QHBoxLayout, QTabWidget, \
+    QSlider, QDial, QPushButton, QCheckBox, QRadioButton, QComboBox, QSpinBox, QLineEdit, QApplication, QAction
 
 
-class UIElement:
-    def __init__(self, widget: QWidget = None, description: str = '', disable: bool = False):
-        self.name = description
+class UIElement(QWidget):
+    def __init__(self, widget: QWidget = None, layout: QLayout = None, description: str = None, disable: bool = False):
+        super().__init__()
         self._widget = widget
-        self._widget.setDisabled(disable)
-        self.out_widget = None
-
-    def __widget__(self):
-        return self._widget
+        widget.setContentsMargins(0, 0, 0, 0)
+        layout.setAlignment(Qt.AlignCenter)
+        widget.setDisabled(disable)
+        self._layout = QVBoxLayout() if layout is None else layout
+        if description is not None:
+            self._layout.addWidget(QLabel(self.name), alignment=Qt.AlignCenter)
+        if widget is not None:
+            self._layout.addWidget(self._widget, alignment=Qt.AlignCenter)
+        self.setLayout(self._layout)
 
     def toggle_widget(self, state=None):
-        self._widget.setDisabled(self._widget.isEnabled() if state is None else not state)
-
-    def build_widget(self, pos: str = 'v', with_desc: bool = False) -> QWidget:
-        """
-            :param with_desc: determines 'name' string visibility
-            :param pos: 'v' for vertical box,
-                        'h' for horizontal box,
-                        'g' for Grid Layout
-                        'f' for Flow Layout
-        """
-        if self.out_widget is None:
-            self.out_widget = QWidget()
-            layout = QVBoxLayout() if pos == 'v' \
-                else QHBoxLayout() if pos == 'h' \
-                else QGridLayout() if pos == 'g' \
-                else FlowLayout()
-            if with_desc:
-                name_label = QLabel(self.name)
-                name_label.setAlignment(Qt.AlignCenter)
-                layout.addWidget(name_label, alignment=Qt.AlignCenter)
-            if self._widget is not None:
-                layout.addWidget(self._widget, alignment=Qt.AlignCenter)
-            layout.setContentsMargins(0, 0, 0, 0)
-            layout.setAlignment(Qt.AlignCenter)
-            self.out_widget.setLayout(layout)
-        return self.out_widget
+        if self._widget is not None:
+            self._widget.setDisabled(
+                self._widget.isEnabled() if state is None else not state)
 
 
 class ImageBox(UIElement):
     import numpy as np
 
     def __init__(self, shape, starter_pic: np.ndarray = None):
-        super().__init__(QLabel())
+        super().__init__(widget=QLabel())
         self._w = shape[0]
         self._h = shape[1]
         self._widget.setFixedSize(shape[0], shape[1])
-        self._widget.setAlignment(Qt.AlignCenter)
         if starter_pic is not None:
             self.show_picture(starter_pic)
 
@@ -60,20 +40,22 @@ class ImageBox(UIElement):
         self._widget.setPixmap(QPixmap(q_img))
 
 
-class Slider(UIElement):
-    def __init__(self, widget: QSlider or QDial, description: str, bounds: tuple, disable=False):
-        super().__init__(widget, description, disable=disable)
+class AbstractSlider(UIElement):
+    def __init__(self, widget: QSlider or QDial, bounds: tuple, description: str = None, disable=False):
+        super().__init__(widget, description=description, disable=disable)
         self._widget.setMinimum(bounds[0])
         self._widget.setMaximum(bounds[1])
         self._val_label = QLabel('0')
-        self._val_label.setAlignment(Qt.AlignHCenter)
-        self._resetter = lambda: 1
+        self._val_label.setAlignment(Qt.AlignCenter)
+        self._def_val_func = lambda: 1
+        self.layout().addWidget(self._val_label)
+        self._widget.valueChanged.connect(lambda: self._val_label.setText(str(self._widget.value())))
 
-    def define_resetter(self, resetter):
-        self._resetter = resetter
+    def define_reset_method(self, func):
+        self._def_val_func = func
 
     def reset(self):
-        self._widget.setValue(self._resetter())
+        self._widget.setValue(self._def_val_func())
 
     def link_value(self, setter):
         self._widget.valueChanged.connect(lambda: setter(self._widget.value()))
@@ -81,16 +63,10 @@ class Slider(UIElement):
     def __set_custom_value__(self, value):
         self._widget.setValue(value)
 
-    def build_widget(self, pos: str = 'v', with_desc: bool = False):
-        wgt = super().build_widget(pos, with_desc)
-        wgt.layout().addWidget(self._val_label)
-        self._widget.valueChanged.connect(lambda: self._val_label.setText(str(self._widget.value())))
-        return wgt
-
 
 class SpinBox(UIElement):
-    def __init__(self, widget: QSpinBox, description: str, bounds: tuple):
-        super().__init__(widget, description)
+    def __init__(self, description: str, bounds: tuple):
+        super().__init__(QSpinBox(), description=description)
         self._widget.setMinimum(bounds[0])
         self._widget.setMaximum(bounds[1])
 
@@ -99,11 +75,9 @@ class SpinBox(UIElement):
         return self
 
 
-class Dial(Slider):
-    def __init__(self, description: str, bounds: tuple, disable=False):
-        super().__init__(QDial(), description, bounds, disable)
-        self._function = lambda: 0
-        self._widget.valueChanged.connect(self._function)
+class Dial(AbstractSlider):
+    def __init__(self, bounds: tuple, description: str = None, disable=False):
+        super().__init__(QDial(), bounds=bounds, description=description, disable=disable)
 
 
 class AbstractButton(UIElement):
@@ -153,7 +127,6 @@ class NumericComboBox(UIElement):
       (Лучше по-русски): это класс выпадающего списка,
       который содержит числа (можно с подписями величины: руб.; FPS; шт.)
     """
-
     def __init__(self, items, description='', fnc=None, disable=False):
         self._combo = QComboBox()
         super().__init__(self._combo, description)
@@ -176,7 +149,7 @@ class NumericComboBox(UIElement):
             return 0.
 
     def set_index(self, index: int):
-        self.__widget__().setCurrentIndex(index)
+        self._widget.setCurrentIndex(index)
 
 
 class StatusBar(UIElement):
@@ -191,28 +164,18 @@ class StatusBar(UIElement):
 
 
 class TabElement(UIElement):
-    def __init__(self, name='Unknown', layout='v'):
+    def __init__(self, name='Unknown'):
+        """
+        :param name: displayed name of tab
+        """
         super().__init__()
-        self._pos = layout
         self._name = name
-        self.components = []
 
     def __tab_name__(self):
         return self._name
 
-    def __layout_type__(self):
-        return self._pos
-
     def add_element(self, element: UIElement, with_desc: bool = False):
-        if self.out_widget is None:
-            self.components.append(element.build_widget(with_desc=with_desc))
-        self.out_widget.layout().addWidget(element.build_widget(with_desc=with_desc))
-
-    def build_widget(self, pos: str = 'v', with_desc: bool = False) -> QWidget:
-        widget = super().build_widget(pos, with_desc)
-        for component in self.components:
-            widget.layout().addWidget(component)
-        return widget
+        self.out_widget.layout().addWidget(element.build_widget(with_name=with_desc))
 
 
 class TabManager(UIElement):
@@ -236,11 +199,11 @@ class TabManager(UIElement):
         :param tab: a TabElement object, (not QWidget!)
         :return: nothing
         """
-        self.__widget__().addTab(
-            tab.build_widget(pos=tab.__layout_type__()),
+        self._widget.addTab(
+            tab.build_widget(),
             tab.__tab_name__())
 
-    def set_tabs_position(self, pos: str):
+    def set_tabs_position(self, pos: str = 'u'):
         """
         :param pos: 'l' for left positioning,
                     'r' - is for right
@@ -249,21 +212,40 @@ class TabManager(UIElement):
         :return: nothing.
         """
         self._widget.setTabPosition(
-            QTabWidget.West if pos=='l' else \
-            QTabWidget.East if pos=='r' else \
-            QTabWidget.South if pos=='d' else \
+            QTabWidget.West if pos == 'l' else
+            QTabWidget.East if pos == 'r' else
+            QTabWidget.South if pos == 'd' else
             QTabWidget.North
         )
 
 
-class HorizontalLayout(UIElement):
+class Layout(UIElement):
+    def __init__(self, layout: QLayout):
+        super().__init__(layout=layout)
+        self._layout = layout
+        self._layout.setAlignment(Qt.AlignCenter)
+        self._layout.setContentsMargins(0, 0, 0, 0)
+
+    def add_element(self, element: UIElement):
+        self._layout.addWidget(element)
+
+
+class HorizontalLayout(Layout):
     def __init__(self):
-        super().__init__()
+        super().__init__(QHBoxLayout())
 
 
+class VerticalLayout(Layout):
+    def __init__(self):
+        super().__init__(QVBoxLayout())
 
 
-class Window(QMainWindow):
+class GridLayout(Layout):
+    def __init__(self):
+        super().__init__(QGridLayout())
+
+
+class Window(QWidget):
     def __init__(self, title='Template Window'):
         super().__init__()
         self.setWindowTitle(title)
@@ -277,10 +259,19 @@ class Window(QMainWindow):
     def add_menu(self, title: str):
         self._menu_list[title] = self._menu_bar.addMenu(title)
 
-    def add_menu_action(self, menu_title:str, action_name:str, function):
+    def add_menu_action(self, menu_title: str, action_name: str, function):
         action = QAction(action_name, self)
         action.triggered.connect(function)
         self._menu_list[menu_title].addAction(action)
 
-    def message_to_status_bar(self, message:str='test'):
+    def set_main_layout(self, layout: Layout):
+        self.setCentralWidget(layout)
+
+    def message_to_status_bar(self, message: str = 'test'):
         self._status_bar.showMessage(message)
+
+
+class Program(QApplication):
+    def __init__(self):
+        import sys
+        super().__init__(sys.argv)

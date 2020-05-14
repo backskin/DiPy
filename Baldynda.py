@@ -84,7 +84,7 @@ class ControlTab(QWidget):
 
         self.layout().addWidget(self._button_play.build_widget())
         self.layout().addWidget(self._button_pause.build_widget())
-        self.layout().addWidget(self._fps_combobox.build_widget(with_desc=True))
+        self.layout().addWidget(self._fps_combobox.build_widget(with_name=True))
         self.layout().addWidget(checks)
         self.layout().addWidget(self._start_rec_button.build_widget())
         self.layout().addWidget(self._stop_rec_button.build_widget())
@@ -153,19 +153,19 @@ class AdjustTab(QWidget):
         # добавление крутилок, настраивающих _саму_камеру_ (т.е. не эффекты, а свойства камеры/медиа)
         self._adj_dials = []
         expo_dial = Dial("Exposure", (1, 8))
-        expo_dial.define_resetter(lambda: -1 * streamer.get_property(CAP_PROP_EXPOSURE))
+        expo_dial.define_reset_method(lambda: -1 * streamer.get_property(CAP_PROP_EXPOSURE))
         expo_dial.link_value(lambda val: streamer.set_property(CAP_PROP_EXPOSURE, -1 * val))
         self._adj_dials.append(expo_dial)
         cont_dial = Dial("Contrast", (25, 115))
-        cont_dial.define_resetter(lambda: streamer.get_property(CAP_PROP_CONTRAST))
+        cont_dial.define_reset_method(lambda: streamer.get_property(CAP_PROP_CONTRAST))
         cont_dial.link_value(lambda val: streamer.set_property(CAP_PROP_CONTRAST, val))
         self._adj_dials.append(cont_dial)
         bright_dial = Dial("Brightness", (95, 225))
-        bright_dial.define_resetter(lambda: streamer.get_property(CAP_PROP_BRIGHTNESS))
+        bright_dial.define_reset_method(lambda: streamer.get_property(CAP_PROP_BRIGHTNESS))
         bright_dial.link_value(lambda val: streamer.set_property(CAP_PROP_BRIGHTNESS, val))
         self._adj_dials.append(bright_dial)
         satur_dial = Dial("Saturation", (0, 255))
-        satur_dial.define_resetter(lambda: streamer.get_property(CAP_PROP_SATURATION))
+        satur_dial.define_reset_method(lambda: streamer.get_property(CAP_PROP_SATURATION))
         satur_dial.link_value(lambda val: streamer.set_property(CAP_PROP_SATURATION, val))
         self._adj_dials.append(satur_dial)
         # gain is not supported on Raspberry Pi
@@ -185,7 +185,7 @@ class AdjustTab(QWidget):
                     self.layout().addWidget(row_sep)
                 self.layout().addWidget(row)
 
-            row.layout().addWidget(dial.build_widget(with_desc=True))
+            row.layout().addWidget(dial.build_widget(with_name=True))
             i += j % 2
             j = (j + 1) % 2
 
