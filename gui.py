@@ -277,7 +277,7 @@ class GridLayout(Layout):
 
 
 class Window(QWidget):
-    def __init__(self, title='Template Window'):
+    def __init__(self, title:str):
         super().__init__()
         self.setWindowTitle(title)
         self._menu_bar = self.menuBar()
@@ -306,3 +306,8 @@ class Program(QApplication):
     def __init__(self):
         import sys
         super().__init__(sys.argv)
+
+    def create_window(self, window_title:str='Template Window'):
+        window = Window(window_title)
+        window.show()
+        return window

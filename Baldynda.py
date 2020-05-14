@@ -1,8 +1,6 @@
 import os.path
 import sys
 
-from gui import ImageBox, StatusBar, Button,
-
 from processors import RecorderProcessor, Streamer, load_picture, \
     BoolSignal, FrameSignal, ProcessorManager, RGBProcessor, MovementProcessor
 from cv2 import addWeighted, CAP_PROP_BRIGHTNESS, CAP_PROP_CONTRAST, \
