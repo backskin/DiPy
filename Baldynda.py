@@ -5,8 +5,8 @@ from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 
-from backslib.processors import RecordProcessorModule, load_picture, \
-     ProcessorManager, RGBProcessorModule, MovementProcessorModule
+from backslib.ImageProcessor import RecordProcessorModule, load_picture, \
+     ImageProcessor, RGBProcessorModule, MovementProcessorModule
 from backslib.signals import BoolSignal, FrameSignal
 from backslib.Player import Streamer
 from cv2 import CAP_PROP_BRIGHTNESS, CAP_PROP_CONTRAST, \
@@ -218,7 +218,7 @@ class StatusBar(QWidget):
 
 
 class ControlTab(QWidget):
-    def __init__(self, status_bar: StatusBar, streamer: Streamer, manager: ProcessorManager):
+    def __init__(self, status_bar: StatusBar, streamer: Streamer, manager: ImageProcessor):
         super().__init__()
         self._streamer = streamer
         streamer.get_signal().connect_(lambda: self._stream_handler(streamer.get_signal().value()))
@@ -248,7 +248,6 @@ class ControlTab(QWidget):
         self._stop_rec_button = make_button("Stop Record", disable=True)
         self._start_rec_button = make_button("Start Record", disable=True)
 
-        self._start_rec_button.clicked.connect(lambda: self._add_recorder(manager=manager))
         self._stop_rec_button.clicked.connect(lambda: self._remove_recorder(manager=manager))
 
         self.layout().addWidget(self._button_play)
@@ -272,9 +271,6 @@ class ControlTab(QWidget):
         self._flip_checkbox.toggle_widget(state)
         self._raw_rec_checkbox.toggle_widget(state)
 
-    def _add_recorder(self, manager: ProcessorManager):
-        self._rec_processor = RecordProcessorModule(self._streamer.get_fps())
-
         if not self._raw_rec_checkbox.state():
             manager.add_module_last(self._rec_processor)
         else:
@@ -286,7 +282,7 @@ class ControlTab(QWidget):
         self._rgb_checkbox.toggle_widget(False)
         self._raw_rec_checkbox.toggle_widget(False)
 
-    def _remove_recorder(self, manager: ProcessorManager):
+    def _remove_recorder(self, manager: ImageProcessor):
         self._start_rec_button.setDisabled(False)
         self._stop_rec_button.setDisabled(True)
         self._flip_checkbox.toggle_widget(True)
@@ -296,7 +292,7 @@ class ControlTab(QWidget):
             manager.remove_module(self._rec_processor)
             self._status_bar.message('Successfully recorded: ' + self._rec_processor.get_filename())
 
-    def _toggle_rgb_fix(self, manager: ProcessorManager):
+    def _toggle_rgb_fix(self, manager: ImageProcessor):
         if self._rgb_processor is None:
             self._rgb_processor = RGBProcessorModule()
             manager.add_module_last(self._rgb_processor)
@@ -366,7 +362,7 @@ class AdjustTab(QWidget):
 
 
 class DetectionTab(QWidget):
-    def __init__(self, manager: ProcessorManager):
+    def __init__(self, manager: ImageProcessor):
         super().__init__()
         self.setLayout(QVBoxLayout())
         self.layout().setAlignment(Qt.AlignTop)
@@ -382,7 +378,7 @@ class DetectionTab(QWidget):
         self._human_detect_radio = CheckBox('Detect humans')
         self.layout().addWidget(self._human_detect_radio.build_widget())
 
-    def toggle_mvm_processor(self, manager: ProcessorManager):
+    def toggle_mvm_processor(self, manager: ImageProcessor):
         if self._mvm_processor is None:
             self._mvm_processor = MovementProcessorModule()
             manager.add_module_first(self._mvm_processor)
@@ -396,7 +392,7 @@ class SmartWindow(QWidget):
         super().__init__()
         self.setWindowTitle(title)
 
-        self._manager = ProcessorManager()
+        self._manager = ImageProcessor()
         self._streamer = Streamer(self._manager)
 
         layout = QHBoxLayout()

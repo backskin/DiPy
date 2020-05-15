@@ -1,11 +1,8 @@
-from threading import Thread
-from time import sleep
-
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtWidgets import QWidget, QLabel, QLayout, QGridLayout, QVBoxLayout, QHBoxLayout, \
     QTabWidget, QMainWindow, QSlider, QDial, QPushButton, QCheckBox, QRadioButton, QComboBox, \
-    QSpinBox, QLineEdit, QApplication, QAction, QFrame
+    QSpinBox, QLineEdit, QApplication, QAction, QFrame, QSizePolicy
 
 
 class UIElement:
@@ -29,7 +26,7 @@ class UIElement:
         :param disable:
         """
         super().__init__()
-        self._out_widget = QWidget()
+        self._out_widget = QFrame()
         self._widget = widget
         self._layout = QVBoxLayout() if layout is None else layout
         self._layout.setAlignment(Qt.AlignCenter)
@@ -37,19 +34,28 @@ class UIElement:
         if description is not None:
             self._layout.addWidget(QLabel(description), alignment=Qt.AlignCenter)
         if widget is not None:
-            widget.setContentsMargins(0, 0, 0, 0)
             widget.setDisabled(disable)
+            widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             self._layout.addWidget(self._widget)
         self._out_widget.setLayout(self._layout)
+
+    def stroke(self):
+        self._out_widget.setFrameStyle(QFrame.StyledPanel)
 
     def toggle_element(self, state=None):
         if self._widget is not None:
             self._widget.setDisabled(self._widget.isEnabled() if state is None else not state)
 
+    def set_width(self, width):
+        self._out_widget.setMinimumWidth(width)
+
+    def set_height(self, height):
+        self._out_widget.setMinimumHeight(height)
+
     def __layout__(self) -> QLayout:
         return self._out_widget.layout()
 
-    def __widget__(self) -> QWidget:
+    def __widget__(self) -> QFrame:
         return self._out_widget
 
 
@@ -57,17 +63,15 @@ class Separator(UIElement):
     """
     Separator - класс визуального разделителя элементов (просто полосочка во всю ширину)
     """
-
     def __init__(self, pos='h'):
         """
-        :param pos: определить, горизонтальным ('h') или вертикальным ('v') будет
-                    разделитель
+        :param pos: определить, горизонтальным ('h')
+                или вертикальным ('v') будет разделитель
         """
         layout = QHBoxLayout() if pos == 'h' else QVBoxLayout()
-        line = QFrame()
-        super().__init__(widget=line, layout=layout)
-        line.setFrameShadow(QFrame.Sunken)
-        line.setMidLineWidth(1)
+        super().__init__(layout=layout)
+        self.__widget__().setLineWidth(0)
+        self.__widget__().setFrameStyle(QFrame.StyledPanel)
 
 
 class ImageBox(UIElement):
@@ -88,8 +92,8 @@ class ImageBox(UIElement):
         :return: ничего
         """
         h, w, channels = picture.shape
-        bytesPerLine = channels * w
-        q_img = QImage(picture.data, w, h, bytesPerLine, QImage.Format_RGB888)
+        bpl = channels * w  # bytes per line
+        q_img = QImage(picture.data, w, h, bpl, QImage.Format_RGB888)
         self._widget.setPixmap(QPixmap(q_img))
 
 
@@ -135,7 +139,7 @@ class Dial(AbstractSlider):
 
 class AbstractButton(UIElement):
     def __init__(self, button: QCheckBox or QRadioButton or QPushButton, disable=False):
-        super().__init__(button, disable=disable)
+        super().__init__(widget=button, layout=QHBoxLayout(), disable=disable)
 
     def set_function(self, function):
         self._widget.clicked.connect(function)
@@ -233,14 +237,18 @@ class StatusBar(UIElement):
 
 
 class TabElement(UIElement):
-    def __init__(self, name='Unknown'):
+    """
+    TabElement - Класс одной вкладки для менеджера вкладок (TabManager)
+    """
+    def __init__(self, name='Unknown', style='v'):
         """
-        :param name: displayed name of tab
+        :param name: отображаемое название вкладки
+        :param style: 'v' для вертикального расположения,
+                      'h' для горизонтального
         """
-        super().__init__()
+        super().__init__(layout=QVBoxLayout() if style=='v' else QHBoxLayout())
         self._name = name
         self.__layout__().setAlignment(Qt.AlignTop)
-        self.__layout__().setContentsMargins(24,8,24,0)
 
     def set_padding(self, left=0, up=0, right=0, bottom=0):
         self.__layout__().setContentsMargins(left, up, right, bottom)
@@ -307,7 +315,7 @@ class Layout(UIElement):
         super().__init__(layout=layout)
         self._layout = layout
         self._layout.setAlignment(Qt.AlignCenter)
-        self._layout.setContentsMargins(0, 0, 0, 0)
+        # self.__widget__().
 
     def add_element(self, element: UIElement):
         self._layout.addWidget(element.__widget__())
@@ -341,9 +349,6 @@ class Window:
         self._menu_bar = self._window.menuBar()
         self._menu_list = {}
         self._status_bar = self._window.statusBar()
-
-    # def fix_size(self):
-    #     self._window.setFixedSize(self._window.width(), self._window.height())
 
     def add_menu(self, title: str):
         self._menu_list[title] = self._menu_bar.addMenu(title)

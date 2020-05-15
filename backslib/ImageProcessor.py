@@ -1,5 +1,5 @@
 from backslib.Player import VideoRecorder
-from backslib.signals import FrameSignal
+from backslib import FrameSignal
 
 
 def load_picture(path: str):
@@ -17,9 +17,9 @@ class ProcessorModule:
         pass
 
     def __process_frame__(self, frame):
-        """ abstract method for any module
-            :param frame - a numpy-array-type frame
-            picture from VideoCapture object
+        """ общий метод для модуля обработки
+            :param frame - входящий кадр на обработку
+            :returns вовзращает обработанный кадр
         """
         return frame
 
@@ -43,11 +43,13 @@ class RecordProcessorModule(ProcessorModule, VideoRecorder):
     #           при инициализации вызываются последовательно конструкторы
     #           предков в обратном порядке (от последнего записанного к первому)
     def __init__(self):
-        super(VideoRecorder).__init__()
+        ProcessorModule.__init__(self)
+        VideoRecorder.__init__(self)
 
     def __process_frame__(self, frame):
-        self.add_frame(frame)
         self.play()
+        self.add_frame(frame)
+        return frame
 
     def finish(self):
         self.stop()
@@ -83,38 +85,38 @@ class MovementProcessorModule(ProcessorModule):
         return frame
 
 
-class ProcessorManager:
+class ImageProcessor:
     def __init__(self):
         self._frame_signal = FrameSignal()
-        self._processors = list()  # Я не знаю почему, но мне пришлось неинтуитивно
+        self._modules = []  # Я не знаю почему, но мне пришлось неинтуитивно
         # Поменять местами функции :add_module_last и :add_module_first, в связи с их неверной работой
         # т.е. сейчас почему-то (может я чего не понял) если вставлять в позицию 0, то это будет
         # последний элемент для for. И наоборот - если вставлять через append, то это элемент будет последним
 
     def add_module_last(self, module: ProcessorModule):
-        self._processors.insert(0, module)
+        self._modules.insert(0, module)
 
     def add_module_first(self, module: ProcessorModule):
-        self._processors.append(module)
+        self._modules.append(module)
 
     def toggle_module(self, module: ProcessorModule):
-        if module in self._processors:
+        if module in self._modules:
             module.finish()
-            self._processors.remove(module)
+            self._modules.remove(module)
         else:
-            self._processors.insert(0, module)
+            self._modules.insert(0, module)
 
     def remove_module(self, module: ProcessorModule):
-        if module in self._processors:
+        if module in self._modules:
             module.finish()
-            self._processors.remove(module)
+            self._modules.remove(module)
 
     def catch(self, frame):
         self._frame_signal.set(self._modular_processing(frame))
 
     def _modular_processing(self, frame):
-        for proc in self._processors:
-            frame = proc.__process_frame__(frame)
+        for module in self._modules:
+            frame = module.__process_frame__(frame)
         return frame
 
     def get_frame_signal(self):

@@ -1,27 +1,37 @@
 from threading import Thread
 
 from IPython.utils.timing import clock
-from cv2.cv2 import CAP_PROP_FPS, flip, CAP_PROP_FRAME_WIDTH, CAP_PROP_FRAME_HEIGHT, VideoCapture, VideoWriter
+from cv2.cv2 import flip, VideoCapture, VideoWriter, CAP_PROP_FPS as FPS_PROPERTY, \
+    CAP_PROP_FRAME_WIDTH as WIDTH_PROPERTY, CAP_PROP_FRAME_HEIGHT as HEIGHT_PROPERTY, \
+    CAP_PROP_BRIGHTNESS as BRIGHTNESS_PROPERTY, CAP_PROP_CONTRAST as CONTRAST_PROPERTY, \
+    CAP_PROP_SATURATION as SATURATION_PROPERTY, CAP_PROP_EXPOSURE as EXPOSURE_PROPERTY
 
-from backslib.signals import BoolSignal, PNSignal, precise_sleep, FrameSignal, Signal
+from backslib import precise_sleep, BoolSignal, FrameSignal, Signal
 
 
 class Player:
     def __init__(self):
         self._signal = BoolSignal()
-        self._stop_signal = PNSignal(self._signal, False)
-        self._play_signal = PNSignal(self._signal, True)
+        self._speed = 0
+        self._play_signal = self._signal.positive_signal()
+        self._stop_signal = self._signal.negative_signal()
         self._play_signal.connect_(self.__play__)
         self._stop_signal.connect_(self.__stop__)
 
-    def get_signal(self):
-        return  self._signal
+    def get_signal(self) -> BoolSignal:
+        return self._signal
 
     def get_play_signal(self) -> Signal:
         return self._play_signal
 
     def get_stop_signal(self) -> Signal:
         return self._stop_signal
+
+    def get_speed(self):
+        return self._speed
+
+    def set_speed(self, speed):
+        self._speed = speed
 
     def play(self):
         self._signal.set(True)
@@ -37,10 +47,9 @@ class Player:
 
 
 class Streamer(Player):
-    def __init__(self, grabber, source=0, fps=0):
+    def __init__(self, grabber, source=0):
         super().__init__()
         self._flip_state = False
-        self._fps = fps
         self._video_cap = VideoCapture()
         self._grab = grabber
         self._source = source
@@ -51,12 +60,14 @@ class Streamer(Player):
 
     def get_shape(self):
         if self._video_cap.isOpened():
-            shape = (self._video_cap.get(CAP_PROP_FRAME_WIDTH),
-                     self._video_cap.get(CAP_PROP_FRAME_HEIGHT))
+            w = int(self._video_cap.get(WIDTH_PROPERTY))
+            h = int(self._video_cap.get(HEIGHT_PROPERTY))
+            shape = (w, h)
         else:
             self._video_cap.open(self._source)
-            shape = (self._video_cap.get(CAP_PROP_FRAME_WIDTH),
-                     self._video_cap.get(CAP_PROP_FRAME_HEIGHT))
+            w = int(self._video_cap.get(WIDTH_PROPERTY))
+            h = int(self._video_cap.get(HEIGHT_PROPERTY))
+            shape = (w, h)
             self._video_cap.release()
         return shape
 
@@ -69,17 +80,8 @@ class Streamer(Player):
     def set_property(self, PROP, value):
         self._video_cap.set(PROP, value)
 
-    def get_fps(self):
-        return self.get_property(CAP_PROP_FPS) if self._fps == 0 else self._fps
-
-    def set_fps(self, fps: int):
-        self._fps = fps
-
-    def _start_stream(self):
-        pass
-
     def __play__(self):
-        delay = 1. / self._fps if self._fps != 0 else None
+        delay = 1. / self._speed if self._speed != 0 else None
         self._video_cap.open(self._source)
         self._thread = Thread(target=self._thread_func, args=(delay,))
         self._thread.start()
@@ -109,13 +111,14 @@ class Streamer(Player):
 
 
 class VideoRecorder(Player):
-    def __init__(self, fps: float = 12.0):
+    def __init__(self):
         super().__init__()
-        self._fps = fps
-        self._first_frame = None
+        self._size = (640, 480)  # default value
         self._output = None
-        self._filename = '_'
+        self._filename = None
         self._output = None
+        self._speed = 30.0  # default value
+        self._frame_signal = FrameSignal()
 
     def set_filename(self):
         from datetime import datetime
@@ -124,15 +127,16 @@ class VideoRecorder(Player):
     def get_filename(self):
         return self._filename
 
+    def set_size(self, width, height):
+        self._size = (width, height)
+
     def add_frame(self, frame):
-        self._output.write(frame)
-        if self._first_frame is None:
-            self._first_frame = frame
+        self._frame_signal.set(frame)
 
     def __play__(self):
         from cv2 import VideoWriter_fourcc as CVCodec
-        h, w, *_ = self._first_frame.shape
-        self._output = VideoWriter(self._filename + '.avi', CVCodec(*'XVID'), self._fps, (w, h))
+        self._output = VideoWriter(self._filename + '.avi', CVCodec(*'XVID'), self._speed, self._size)
+        self._frame_signal.connect_(lambda: self._output.write(self._frame_signal.picture()))
 
     def __stop__(self):
         if self._output is not None:

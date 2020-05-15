@@ -5,7 +5,7 @@ from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 import cv2
 
-from Detector import Detector
+from stuff.Detector import Detector
 
 CAMERA_WIDTH = 640
 CAMERA_HEIGHT = 480
