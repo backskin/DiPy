@@ -18,6 +18,8 @@ class ProcessorModule:
 
     def __process_frame__(self, frame):
         """ общий метод для модуля обработки
+            необходима перегрузка данного метода для каждого наследника!
+            (т.е. каждый модуль должен иметь _свой_ метод __process_frame__
             :param frame - входящий кадр на обработку
             :returns вовзращает обработанный кадр
         """
@@ -110,6 +112,11 @@ class ImageProcessor:
         if module in self._modules:
             module.finish()
             self._modules.remove(module)
+
+    def finish_all(self):
+        for module in self._modules:
+            module.finish()
+        self._modules.clear()
 
     def catch(self, frame):
         self._frame_signal.set(self._modular_processing(frame))

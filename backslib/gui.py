@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import QWidget, QLabel, QLayout, QGridLayout, QVBoxLayout, 
     QSpinBox, QLineEdit, QApplication, QAction, QFrame, QSizePolicy
 
 
-class UIElement:
+class _UIElement:
     """
     Универсальный класс элемента интерфейса. Создан, потому что изначальные классы PyQt
     требуют значительной доработки и к тому же недостаточно интуитивны, легко запутаться
@@ -20,37 +20,62 @@ class UIElement:
     def __init__(self, widget: QWidget = None, layout: QLayout = None,
                  description: str = None, disable: bool = False):
         """
-        :param widget:
-        :param layout:
-        :param description:
-        :param disable:
+        :param widget: класс Qt Widget, который будет отображаться как элемент интерфейса
+        :param layout: класс слоя, который будет основанием, на котором будет лежать виджет
+        :param description: описание или название, котороые при наличии будет отображаться над виджетом
+        :param disable: опция отключения виджета при создании. По умолчанию False, т.е. виджет включён
         """
         super().__init__()
         self._out_widget = QFrame()
         self._widget = widget
         self._layout = QVBoxLayout() if layout is None else layout
-        self._layout.setAlignment(Qt.AlignCenter)
-        self._layout.setContentsMargins(0, 0, 0, 0)
+        self._layout.setContentsMargins(2, 2, 2, 2)
         if description is not None:
             self._layout.addWidget(QLabel(description), alignment=Qt.AlignCenter)
         if widget is not None:
             widget.setDisabled(disable)
-            widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             self._layout.addWidget(self._widget)
         self._out_widget.setLayout(self._layout)
-
-    def stroke(self):
-        self._out_widget.setFrameStyle(QFrame.StyledPanel)
 
     def toggle_element(self, state=None):
         if self._widget is not None:
             self._widget.setDisabled(self._widget.isEnabled() if state is None else not state)
 
-    def set_width(self, width):
-        self._out_widget.setMinimumWidth(width)
+    def set_max_width(self, width):
+        if self._widget is None:
+            self._out_widget.setMaximumWidth(width)
+        else:
+            self._widget.setMaximumWidth(width)
 
-    def set_height(self, height):
-        self._out_widget.setMinimumHeight(height)
+    def set_max_height(self, height):
+        if self._widget is None:
+            self._out_widget.setMaximumHeight(height)
+        else:
+            self._widget.setMaximumHeight(height)
+
+    def set_fixed_width(self, width):
+        if self._widget is None:
+            self._out_widget.setFixedWidth(width)
+        else:
+            self._widget.setFixedWidth(width)
+
+    def set_fixed_height(self, height):
+        if self._widget is None:
+            self._out_widget.setFixedHeight(height)
+        else:
+            self._widget.setFixedHeight(height)
+
+    def set_min_width(self, width):
+        if self._widget is None:
+            self._out_widget.setMinimumWidth(width)
+        else:
+            self._widget.setMinimumWidth(width)
+
+    def set_min_height(self, height):
+        if self._widget is None:
+            self._out_widget.setMinimumHeight(height)
+        else:
+            self._widget.setMinimumHeight(height)
 
     def __layout__(self) -> QLayout:
         return self._out_widget.layout()
@@ -59,7 +84,7 @@ class UIElement:
         return self._out_widget
 
 
-class Separator(UIElement):
+class Separator(_UIElement):
     """
     Separator - класс визуального разделителя элементов (просто полосочка во всю ширину)
     """
@@ -70,11 +95,17 @@ class Separator(UIElement):
         """
         layout = QHBoxLayout() if pos == 'h' else QVBoxLayout()
         super().__init__(layout=layout)
+        self.__widget__().setFrameShape(QFrame.HLine if pos == 'h' else QFrame.VLine)
         self.__widget__().setLineWidth(0)
-        self.__widget__().setFrameStyle(QFrame.StyledPanel)
+        self.__widget__().setMidLineWidth(1)
+        self.__widget__().setFrameShadow(QFrame.Sunken)
+        if pos == 'h':
+            self.set_max_height(4)
+        else:
+            self.set_max_width(4)
 
 
-class ImageBox(UIElement):
+class ImageBox(_UIElement):
     """
     ImageBox - это класс, позволяющий отобразить картинку, изображение в качестве элемента интерфейса
     """
@@ -97,14 +128,14 @@ class ImageBox(UIElement):
         self._widget.setPixmap(QPixmap(q_img))
 
 
-class AbstractSlider(UIElement):
+class _AbstractSlider(_UIElement):
     def __init__(self, widget: QSlider or QDial, bounds: tuple, description: str = None, disable=False):
         super().__init__(widget, description=description, disable=disable)
         self._widget.setMinimum(bounds[0])
         self._widget.setMaximum(bounds[1])
         self._val_label = QLabel('0')
-        self._val_label.setAlignment(Qt.AlignCenter)
         self._def_val_func = lambda: 1
+        self._val_label.setAlignment(Qt.AlignHCenter)
         self.__layout__().addWidget(self._val_label)
         self._widget.valueChanged.connect(lambda: self._val_label.setText(str(self._widget.value())))
 
@@ -121,7 +152,7 @@ class AbstractSlider(UIElement):
         self._widget.setValue(value)
 
 
-class SpinBox(UIElement):
+class SpinBox(_UIElement):
     def __init__(self, description: str, bounds: tuple):
         super().__init__(QSpinBox(), description=description)
         self._widget.setMinimum(bounds[0])
@@ -132,12 +163,13 @@ class SpinBox(UIElement):
         return self
 
 
-class Dial(AbstractSlider):
+class Dial(_AbstractSlider):
     def __init__(self, bounds: tuple, description: str = None, disable=False):
         super().__init__(QDial(), bounds=bounds, description=description, disable=disable)
+        self.__widget__().setFixedHeight(140)
 
 
-class AbstractButton(UIElement):
+class _AbstractButton(_UIElement):
     def __init__(self, button: QCheckBox or QRadioButton or QPushButton, disable=False):
         super().__init__(widget=button, layout=QHBoxLayout(), disable=disable)
 
@@ -151,7 +183,12 @@ class AbstractButton(UIElement):
         return self._widget.isEnabled()
 
 
-class CheckBox(AbstractButton):
+class Button(_AbstractButton):
+    def __init__(self, description: str, disable=False):
+        super().__init__(QPushButton(description), disable)
+
+
+class CheckBox(_AbstractButton):
     def __init__(self, description: str, disable=False):
         super().__init__(QCheckBox(description), disable)
         self._widget.setDisabled(disable)
@@ -159,11 +196,8 @@ class CheckBox(AbstractButton):
     def state(self):
         return self._widget.checkState()
 
-    def set_function(self, function):
-        self._widget.stateChanged.connect(function)
 
-
-class RadioButton(AbstractButton):
+class RadioButton(_AbstractButton):
     def __init__(self, description: str, disable=False):
         super().__init__(QRadioButton(description), disable)
 
@@ -174,17 +208,11 @@ class RadioButton(AbstractButton):
         self._widget.toggled.connect(function)
 
 
-class Button(AbstractButton):
-    def __init__(self, description: str, disable=False):
-        super().__init__(QPushButton(description), disable)
-
-
-class NumericComboBox(UIElement):
+class NumericComboBox(_UIElement):
     """
       (Лучше по-русски): это класс выпадающего списка,
       который содержит числа (можно с подписями величины: руб.; FPS; шт.)
     """
-
     def __init__(self, items, description='', fnc=None, disable=False):
         """
         :param items: это перечисление или list(), содержащий элементы выпадающего списка
@@ -224,11 +252,10 @@ class NumericComboBox(UIElement):
         self._widget.setCurrentIndex(index)
 
 
-class StatusBar(UIElement):
+class StatusBar(_UIElement):
     def __init__(self):
         self._line = QLineEdit()
         super().__init__(self._line, layout=QHBoxLayout())
-        self.__layout__().setContentsMargins(0, 0, 0, 0)
         self._line.setDisabled(True)
         self._line.setText('-')
 
@@ -236,7 +263,57 @@ class StatusBar(UIElement):
         self._line.setText(text)
 
 
-class TabElement(UIElement):
+class _Layout(_UIElement):
+    """
+    Layout - класс слоя, и, что важно, _также_ являющийся таким же элементом интерфейса,
+             короче, никакой путаницы, на деле в него можно вставлять другие слои _ТАКИМ_ЖЕ_ методом,
+             как и все остальные элементы
+    """
+    def __init__(self, layout: QLayout):
+        super().__init__(layout=layout)
+
+    def add_element(self, element: _UIElement):
+        self._layout.addWidget(element.__widget__())
+
+    def add_all(self, *elements):
+        for elem in elements:
+            self.add_element(elem)
+
+    def set_padding(self, left=0, up=0, right=0, bottom=0):
+        """
+        Устанавливает длину отступа всех элементов внутри от краёв слоя
+        Отступ отмеряется в пикселах
+        :param left: слева
+        :param up: сверху
+        :param right: справа
+        :param bottom: снизу
+        :return:
+        """
+        self._layout.setContentsMargins(left, up, right, bottom)
+
+
+class HorizontalLayout(_Layout):
+    def __init__(self):
+        super().__init__(QHBoxLayout())
+
+
+class VerticalLayout(_Layout):
+    def __init__(self):
+        super().__init__(QVBoxLayout())
+
+
+class GridLayout(_Layout):
+    def __init__(self):
+        super().__init__(QGridLayout())
+
+
+class FlowLayout(_Layout):
+    def __init__(self):
+        from backslib.QFlowLayout import QFlowLayout
+        super().__init__(QFlowLayout())
+
+
+class TabElement(_Layout):
     """
     TabElement - Класс одной вкладки для менеджера вкладок (TabManager)
     """
@@ -246,29 +323,18 @@ class TabElement(UIElement):
         :param style: 'v' для вертикального расположения,
                       'h' для горизонтального
         """
-        super().__init__(layout=QVBoxLayout() if style=='v' else QHBoxLayout())
+        super().__init__(layout=QVBoxLayout() if style == 'v' else QHBoxLayout())
         self._name = name
         self.__layout__().setAlignment(Qt.AlignTop)
-
-    def set_padding(self, left=0, up=0, right=0, bottom=0):
-        self.__layout__().setContentsMargins(left, up, right, bottom)
 
     def __tab_name__(self):
         return self._name
 
-    def add_element(self, element: UIElement):
-        self.__layout__().addWidget(element.__widget__())
 
-    def add_all(self, *elements):
-        for elem in elements:
-            self.add_element(elem)
-
-
-class TabManager(UIElement):
+class TabManager(_UIElement):
     """
     :TabManager - Позволяет отображать вкладки. Настраивается направление вкладок
     """
-
     def __init__(self, tab_pos='u'):
         """
         Creates Widget for tabs management
@@ -277,7 +343,7 @@ class TabManager(UIElement):
                         'd' - for low position of tabs
                         'u' or any other - for upper position
         """
-        super().__init__(QTabWidget())
+        super().__init__(widget=QTabWidget())
         self.set_tabs_position(tab_pos)
 
     def add_tab(self, tab: TabElement):
@@ -287,6 +353,7 @@ class TabManager(UIElement):
         :return: nothing
         """
         self._widget.addTab(tab.__widget__(), tab.__tab_name__())
+        self.__layout__().setAlignment(Qt.AlignCenter)
 
     def set_tabs_position(self, pos: str = 'u'):
         """
@@ -302,44 +369,6 @@ class TabManager(UIElement):
             QTabWidget.South if pos == 'd' else
             QTabWidget.North
         )
-
-
-class Layout(UIElement):
-    """
-    Layout - класс слоя, и, что важно, _также_ являющийся таким же элементом интерфейса,
-             короче, никакой путаницы, на деле в него можно вставлять другие слои _ТАКИМ_ЖЕ_ методом,
-             как и все остальные элементы
-    """
-
-    def __init__(self, layout: QLayout):
-        super().__init__(layout=layout)
-        self._layout = layout
-        self._layout.setAlignment(Qt.AlignCenter)
-        # self.__widget__().
-
-    def add_element(self, element: UIElement):
-        self._layout.addWidget(element.__widget__())
-
-
-class HorizontalLayout(Layout):
-    def __init__(self):
-        super().__init__(QHBoxLayout())
-
-
-class VerticalLayout(Layout):
-    def __init__(self):
-        super().__init__(QVBoxLayout())
-
-
-class GridLayout(Layout):
-    def __init__(self):
-        super().__init__(QGridLayout())
-
-
-class FlowLayout(Layout):
-    def __init__(self):
-        from backslib.QFlowLayout import QFlowLayout
-        super().__init__(QFlowLayout())
 
 
 class Window:
@@ -358,7 +387,7 @@ class Window:
         action.triggered.connect(function)
         self._menu_list[menu_title].addAction(action)
 
-    def set_main_layout(self, layout: Layout):
+    def set_main_layout(self, layout: _Layout):
         self._window.setCentralWidget(layout.__widget__())
 
     def message_to_status_bar(self, message: str = 'test'):
@@ -371,7 +400,7 @@ class Window:
         self._window.closeEvent = lambda q_event: function()
 
 
-class Program(QApplication):
+class Application(QApplication):
     def __init__(self):
         import sys
         super().__init__(sys.argv)

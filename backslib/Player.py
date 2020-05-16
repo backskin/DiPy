@@ -2,9 +2,7 @@ from threading import Thread
 
 from IPython.utils.timing import clock
 from cv2.cv2 import flip, VideoCapture, VideoWriter, CAP_PROP_FPS as FPS_PROPERTY, \
-    CAP_PROP_FRAME_WIDTH as WIDTH_PROPERTY, CAP_PROP_FRAME_HEIGHT as HEIGHT_PROPERTY, \
-    CAP_PROP_BRIGHTNESS as BRIGHTNESS_PROPERTY, CAP_PROP_CONTRAST as CONTRAST_PROPERTY, \
-    CAP_PROP_SATURATION as SATURATION_PROPERTY, CAP_PROP_EXPOSURE as EXPOSURE_PROPERTY
+    CAP_PROP_FRAME_WIDTH as WIDTH_PROPERTY, CAP_PROP_FRAME_HEIGHT as HEIGHT_PROPERTY
 
 from backslib import precise_sleep, BoolSignal, FrameSignal, Signal
 

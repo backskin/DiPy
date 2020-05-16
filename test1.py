@@ -1,7 +1,7 @@
-from backslib.gui import Program, Window, Separator, VerticalLayout, Button
+from backslib.gui import Application, Window, Separator, VerticalLayout, Button
 
 def main():
-    program = Program()
+    program = Application()
     window = program.create_window()
     layout = VerticalLayout()
     sep = Separator()
