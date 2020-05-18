@@ -2,7 +2,18 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtWidgets import QWidget, QLabel, QLayout, QGridLayout, QVBoxLayout, QHBoxLayout, \
     QTabWidget, QMainWindow, QSlider, QDial, QPushButton, QCheckBox, QRadioButton, QComboBox, \
-    QSpinBox, QLineEdit, QApplication, QAction, QFrame, QSizePolicy
+    QSpinBox, QLineEdit, QApplication, QAction, QFrame
+
+"""
+Данная библиотека - это компиляция классов-обёрток под PyQt классы графических элементов
+                    пользовательского интерфейса (так называемые виджеты, или QWidgets). 
+                    Собиралась под себя, но обладает определённой гибкостью и с лёгкостью 
+                    может быть применима для любых простых работ в Python.
+                    Здесь есть все самые необходимые для взаимодействия элементы.
+                    Да, оригинальная библиотека ещё более обширна для настройки, однако
+                    я решил собрать только то, что будет действительно нужно и полезно
+                    студенту или исследователю, которому нужно быстро наваять GUI.
+"""
 
 
 class _UIElement:
@@ -84,10 +95,23 @@ class _UIElement:
         return self._out_widget
 
 
+class Label(_UIElement):
+    """
+    Label - самая простая реализация - это просто надпись как элемент
+    """
+
+    def __init__(self, text: str = ''):
+        super().__init__(widget=QLabel(text))
+
+    def set_text(self, text: str):
+        self._widget.setText(text)
+
+
 class Separator(_UIElement):
     """
     Separator - класс визуального разделителя элементов (просто полосочка во всю ширину)
     """
+
     def __init__(self, pos='h'):
         """
         :param pos: определить, горизонтальным ('h')
@@ -152,6 +176,19 @@ class _AbstractSlider(_UIElement):
         self._widget.setValue(value)
 
 
+class Dial(_AbstractSlider):
+    def __init__(self, bounds: tuple, description: str = None, disable=False):
+        super().__init__(QDial(), bounds=bounds, description=description, disable=disable)
+        self.__widget__().setFixedHeight(140)
+
+
+class Slider(_AbstractSlider):
+    def __init__(self, bounds: tuple, orientation: str = 'h', description: str = None, disable=False):
+        super().__init__(QSlider(orientation=Qt.Horizontal if orientation == 'h' else Qt.Vertical), bounds=bounds,
+                         description=description, disable=disable)
+        self.__widget__().setFixedHeight(140)
+
+
 class SpinBox(_UIElement):
     def __init__(self, description: str, bounds: tuple):
         super().__init__(QSpinBox(), description=description)
@@ -161,12 +198,6 @@ class SpinBox(_UIElement):
     def set_operation(self, function):
         self._widget.valueChanged.connect(function)
         return self
-
-
-class Dial(_AbstractSlider):
-    def __init__(self, bounds: tuple, description: str = None, disable=False):
-        super().__init__(QDial(), bounds=bounds, description=description, disable=disable)
-        self.__widget__().setFixedHeight(140)
 
 
 class _AbstractButton(_UIElement):
@@ -196,6 +227,9 @@ class CheckBox(_AbstractButton):
     def state(self):
         return self._widget.checkState()
 
+    def set_checked(self, state: bool):
+        self._widget.setChecked(state)
+
 
 class RadioButton(_AbstractButton):
     def __init__(self, description: str, disable=False):
@@ -213,6 +247,7 @@ class NumericComboBox(_UIElement):
       (Лучше по-русски): это класс выпадающего списка,
       который содержит числа (можно с подписями величины: руб.; FPS; шт.)
     """
+
     def __init__(self, items, description='', fnc=None, disable=False):
         """
         :param items: это перечисление или list(), содержащий элементы выпадающего списка
@@ -269,6 +304,7 @@ class _Layout(_UIElement):
              короче, никакой путаницы, на деле в него можно вставлять другие слои _ТАКИМ_ЖЕ_ методом,
              как и все остальные элементы
     """
+
     def __init__(self, layout: QLayout):
         super().__init__(layout=layout)
 
@@ -317,6 +353,7 @@ class TabElement(_Layout):
     """
     TabElement - Класс одной вкладки для менеджера вкладок (TabManager)
     """
+
     def __init__(self, name='Unknown', style='v'):
         """
         :param name: отображаемое название вкладки
@@ -335,6 +372,7 @@ class TabManager(_UIElement):
     """
     :TabManager - Позволяет отображать вкладки. Настраивается направление вкладок
     """
+
     def __init__(self, tab_pos='u'):
         """
         Creates Widget for tabs management
@@ -375,6 +413,8 @@ class Window:
     def __init__(self, title: str):
         self._window = QMainWindow()
         self._window.setWindowTitle(title)
+        self._before_close_routine = []
+        self._window.closeEvent = lambda event: self._close_event_handler()
         self._menu_bar = self._window.menuBar()
         self._menu_list = {}
         self._status_bar = self._window.statusBar()
@@ -390,14 +430,18 @@ class Window:
     def set_main_layout(self, layout: _Layout):
         self._window.setCentralWidget(layout.__widget__())
 
-    def message_to_status_bar(self, message: str = 'test'):
+    def bottom_message(self, message: str = 'test'):
         self._status_bar.showMessage(message)
 
     def show(self):
         self._window.show()
 
-    def set_on_close(self, function):
-        self._window.closeEvent = lambda q_event: function()
+    def _close_event_handler(self):
+        for method in self._before_close_routine:
+            method()
+
+    def add_method_on_close(self, function):
+        self._before_close_routine.append(function)
 
 
 class Application(QApplication):

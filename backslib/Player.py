@@ -1,13 +1,18 @@
 from threading import Thread
 
 from IPython.utils.timing import clock
-from cv2.cv2 import flip, VideoCapture, VideoWriter, CAP_PROP_FPS as FPS_PROPERTY, \
+from cv2.cv2 import flip, VideoCapture, VideoWriter, \
     CAP_PROP_FRAME_WIDTH as WIDTH_PROPERTY, CAP_PROP_FRAME_HEIGHT as HEIGHT_PROPERTY
 
 from backslib import precise_sleep, BoolSignal, FrameSignal, Signal
 
 
 class Player:
+    """
+    Данный класс представляет собой абстракцию некого "плеера", с двумя
+    основными методами Play и Stop, а также с возможностью отслеживания
+    его состояния посредством сигналов.
+    """
     def __init__(self):
         self._signal = BoolSignal()
         self._speed = 0
@@ -17,6 +22,11 @@ class Player:
         self._stop_signal.connect_(self.__stop__)
 
     def get_signal(self) -> BoolSignal:
+        """
+        Возвращает внутренний объект сигнала, который определяет
+        состояние плеера
+        :return: BoolSignal объект
+        """
         return self._signal
 
     def get_play_signal(self) -> Signal:
@@ -99,43 +109,54 @@ class Streamer(Player):
         self._video_cap.release()
 
     def __stop__(self):
-        pass
+        self._thread.join()
 
     def __close__(self):
         self.get_signal().set(False)
-        if self._thread is not None and self._thread.is_alive():
-            self._thread.join()
+        # if self._thread is not None and self._thread.is_alive():
+        #     self._thread.join()
         self._video_cap.release()
 
 
 class VideoRecorder(Player):
+    """
+    Класс-плеер, осуществляющий возможность записи получаемых
+    кадров в видеофайл. Не является потоком. Кадры записываются
+    посредством вызова метода add_frame. В остальном работает как плеер:
+    задал параметры (имя файла, размер кадра, скорость), включил через play()
+    и отправляешь все кадры через add_frame() метод. Затем выключаешь плеер
+    методом stop() - и в папке с программой автоматически сохраняется видеофайл
+    из отправленных кадров
+    """
     def __init__(self):
+
         super().__init__()
         self._size = (640, 480)  # default value
         self._output = None
-        self._filename = None
+        self._filename = 'template'
         self._output = None
-        self._speed = 30.0  # default value
+        self._speed = 30.0  # здесь скорость определяет частоту кадров
         self._frame_signal = FrameSignal()
-
-    def set_filename(self):
-        from datetime import datetime
-        self._filename = "record_" + datetime.now().strftime("%Y%m%d_%H%M%S")
 
     def get_filename(self):
         return self._filename
 
-    def set_size(self, width, height):
-        self._size = (width, height)
-
-    def add_frame(self, frame):
+    def put_frame(self, frame):
         self._frame_signal.set(frame)
 
     def __play__(self):
+        self._frame_signal.connect_(self._initialize_record)
+
+    def _initialize_record(self):
+        self._frame_signal.disconnect_()
+        from datetime import datetime
         from cv2 import VideoWriter_fourcc as CVCodec
-        self._output = VideoWriter(self._filename + '.avi', CVCodec(*'XVID'), self._speed, self._size)
+        h, w = self._frame_signal.picture().shape[:2]
+        self._filename = "record_" + datetime.now().strftime("%Y%m%d_%H%M%S")
+        self._output = VideoWriter(self._filename + '.avi', CVCodec(*'XVID'), self._speed, (w, h))
         self._frame_signal.connect_(lambda: self._output.write(self._frame_signal.picture()))
 
     def __stop__(self):
         if self._output is not None:
             self._output.release()
+        self._output = None
