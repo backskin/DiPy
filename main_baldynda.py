@@ -1,3 +1,9 @@
+"""
+На данный момент рабочая версия библиотеки OpenCV и для Windows и для Raspbian == 4.0.1.22
+Все остальные несовместимы с одной из систем.
+"""
+
+
 from cv2.cv2 import CAP_PROP_BRIGHTNESS, CAP_PROP_CONTRAST, CAP_PROP_EXPOSURE, CAP_PROP_SATURATION, CAP_PROP_GAIN
 
 from backslib.backsgui import Application, HorizontalLayout, VerticalLayout, TabManager, TabElement, \
@@ -36,6 +42,10 @@ def main():
         lambda: window.bottom_message('Стрим приостановлен'))
     from cv2.cv2 import CAP_PROP_FPS as FPS_PROPERTY
     recorder.set_speed(streamer.get_property(FPS_PROPERTY))
+    """
+    Создание окна, отображающего трансляцию.
+    Связь с сигналами стримера и обработчика.
+    """
     frame_box = ImageBox(STANDBY_PICTURE)
     manager.get_frame_signal().connect_(lambda: frame_box.show_picture(manager.get_frame_signal().picture()))
     streamer.get_stop_signal().connect_(lambda: frame_box.show_picture(STANDBY_PICTURE))
