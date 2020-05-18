@@ -122,8 +122,8 @@ def main():
         streamer.get_stop_signal().connect_(lambda: dial.toggle_element(False))
         return dial
 
-    expo_dial = setup_dial("Exposure", CAP_PROP_EXPOSURE, (1, 8), -1)
-    cont_dial = setup_dial("Contrast", CAP_PROP_CONTRAST, (0, 128), 1)
+    expo_dial = setup_dial("Exposure", CAP_PROP_EXPOSURE, (1, 8), 1)
+    cont_dial = setup_dial("Contrast", CAP_PROP_CONTRAST, (0, 255), 1)
     bright_dial = setup_dial("Brightness", CAP_PROP_BRIGHTNESS, (0, 255), 1)
     satur_dial = setup_dial("Saturation", CAP_PROP_SATURATION, (0, 255), 1)
     # gain is not supported on Raspberry Pi
