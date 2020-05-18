@@ -39,7 +39,6 @@ def main():
     frame_box = ImageBox(STANDBY_PICTURE)
     manager.get_frame_signal().connect_(lambda: frame_box.show_picture(manager.get_frame_signal().picture()))
     streamer.get_stop_signal().connect_(lambda: frame_box.show_picture(STANDBY_PICTURE))
-    # status_bar = StatusBar()
     """
     Здесь начинаются вкладки на рабочей области
     """
@@ -97,11 +96,11 @@ def main():
     Цветнось, Уровень (только для windows камер).
     """
     adjust_tab = TabElement("Adjustments")
-    adjust_tab.set_padding(16, 16, 0, 0)
+    adjust_tab.set_padding(16, 16, 16, 16)
     adjs_checkbox = CheckBox('Keep This Settings')
     adjs_checkbox.click()
     adjs_checkbox.toggle_element(False)
-    flow_layout = FlowLayout()
+    flow_layout = VerticalLayout() # FlowLayout()
     streamer.get_signal().connect_(adjs_checkbox.toggle_element)
 
     def setup_dial(name, prop, bounds, multiplier):
@@ -113,8 +112,8 @@ def main():
             :param multiplier: множитель отправляемого значения
             :return:
         """
-        dial = Dial(bounds=bounds, description=name, disable=True)
-        # dial = Slider(bounds=bounds, description=name, disable=True)
+        # dial = Dial(bounds=bounds, description=name, disable=True)
+        dial = Slider(bounds=bounds, description=name, disable=True)
         dial.define_reset_method(lambda: multiplier * streamer.get_property(prop))
         dial.link_value(lambda val: streamer.set_property(prop, multiplier * val))
         adjs_checkbox.set_function(lambda: dial.toggle_element(not adjs_checkbox.state()))
@@ -124,11 +123,11 @@ def main():
         return dial
 
     expo_dial = setup_dial("Exposure", CAP_PROP_EXPOSURE, (1, 8), -1)
-    cont_dial = setup_dial("Contrast", CAP_PROP_CONTRAST, (25, 115), 1)
-    bright_dial = setup_dial("Brightness", CAP_PROP_BRIGHTNESS, (95, 225), 1)
+    cont_dial = setup_dial("Contrast", CAP_PROP_CONTRAST, (0, 128), 1)
+    bright_dial = setup_dial("Brightness", CAP_PROP_BRIGHTNESS, (0, 255), 1)
     satur_dial = setup_dial("Saturation", CAP_PROP_SATURATION, (0, 255), 1)
     # gain is not supported on Raspberry Pi
-    flow_layout.add_element(setup_dial("Gain", CAP_PROP_GAIN, (0, 255), 1))
+    # flow_layout.add_element(setup_dial("Gain", CAP_PROP_GAIN, (0, 255), 1))
 
     flow_layout.add_all(bright_dial, cont_dial, expo_dial, satur_dial)
     adjust_tab.add_all(adjs_checkbox, flow_layout)
@@ -146,13 +145,13 @@ def main():
         streamer.get_signal().connect_(checkbox.toggle_element)
         return checkbox
 
-    # simple_movement_module = SimpleMovementModule()
-    # mvm_checkbox = setup_detector_checkbox('Simple Movement det.', simple_movement_module)
-    # detect_tab.add_element(mvm_checkbox)
-    #
-    # ocv_detector = OpenCVObjectDetector()
-    # ocv_checkbox = setup_detector_checkbox('OCV det.', ocv_detector)
-    # detect_tab.add_element(ocv_checkbox)
+    simple_movement_module = SimpleMovementModule()
+    mvm_checkbox = setup_detector_checkbox('Simple Movement det.', simple_movement_module)
+    detect_tab.add_element(mvm_checkbox)
+
+    ocv_detector = OpenCVObjectDetector()
+    ocv_checkbox = setup_detector_checkbox('OCV det.', ocv_detector)
+    detect_tab.add_element(ocv_checkbox)
     """
     Завершающая часть настройки внешнего вида и управления
     """

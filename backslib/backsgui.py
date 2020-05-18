@@ -186,7 +186,6 @@ class Slider(_AbstractSlider):
     def __init__(self, bounds: tuple, orientation: str = 'h', description: str = None, disable=False):
         super().__init__(QSlider(orientation=Qt.Horizontal if orientation == 'h' else Qt.Vertical), bounds=bounds,
                          description=description, disable=disable)
-        self.__widget__().setFixedHeight(140)
 
 
 class SpinBox(_UIElement):

@@ -53,7 +53,7 @@ class SimpleMovementModule(ProcessorModule):
         blur = GaussianBlur(gray, (5, 5), 0)
         _, thresh = threshold(blur, 20, 255, THRESH_BINARY)
         dilated = dilate(thresh, None, iterations=2)
-        contours = findContours(dilated, RETR_TREE, CHAIN_APPROX_SIMPLE)
+        contours, _ = findContours(dilated, RETR_TREE, CHAIN_APPROX_SIMPLE)
         self._sec_frame = frame.copy()
         for cont in contours:
             (x, y, w, h) = boundingRect(cont)
