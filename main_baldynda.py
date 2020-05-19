@@ -6,14 +6,11 @@
 from cv2.cv2 import CAP_PROP_BRIGHTNESS, CAP_PROP_CONTRAST, CAP_PROP_EXPOSURE, CAP_PROP_SATURATION, CAP_PROP_GAIN
 
 from backslib.backsgui import Application, HorizontalLayout, VerticalLayout, TabManager, TabElement, \
-    ImageBox, Button, CheckBox, Separator, NumericComboBox, Dial, FlowLayout, Label, Slider
+    Button, CheckBox, Separator, NumericComboBox, Dial, Label, Slider
 from backslib.ImageProcessor import ImageProcessor
-from backslib import load_picture
 from backslib.Player import Streamer
-from external_modules import RGBProcessorModule, RecordProcessorModule, SimpleMovementModule, \
-    OpenCVObjectDetector, MobileNetSSDDetector
-
-STANDBY_PICTURE = load_picture('off.jpg')
+from external_modules import RGBProcessorModule, RecordModule, SimpleMovementModule, \
+    MobileNetSSDDetector, ImageBoxModule
 
 
 def open_camera():
@@ -31,7 +28,7 @@ def main():
     window.bottom_message('Балдында версии 0.0.1')
     manager = ImageProcessor()
     streamer = Streamer(manager.catch)
-    recorder = RecordProcessorModule()
+    recorder = RecordModule()
     recorder.get_signal().connect_(
         lambda val: window.bottom_message(
             "Начата запись с камеры..." if val else "Видео сохранено как '" + recorder.get_filename() + "'!"))
@@ -41,12 +38,11 @@ def main():
     from cv2.cv2 import CAP_PROP_FPS as FPS_PROPERTY
     recorder.set_speed(streamer.get_property(FPS_PROPERTY))
     """
-    Создание окна, отображающего трансляцию.
-    Связь с сигналами стримера и обработчика.
+    Создание окна, отображающего трансляцию в виде модуля для обработчика.
+    Настройка связи со стримером
     """
-    frame_box = ImageBox(STANDBY_PICTURE)
-    manager.get_output_frame_signal().connect_(lambda frame: frame_box.show_picture(frame))
-    streamer.get_signal().connect_(lambda val: frame_box.show_picture(STANDBY_PICTURE if not val else None))
+    frame_box = ImageBoxModule()  # ImageBox(STANDBY_PICTURE)
+    streamer.get_signal().connect_(lambda val: manager.toggle_module(frame_box, append=True))
     """
     Здесь начинаются вкладки на рабочей области
     """
@@ -75,9 +71,8 @@ def main():
     fps_combobox.send_value_to(recorder.set_speed)
     fps_combobox.set_index(len(fps_items) - 1)
     streamer.get_signal().connect_(lambda val: fps_combobox.toggle_element(not val))
-    rgb_module = RGBProcessorModule()
     rgb_checkbox = CheckBox("Fix RGB")
-    rgb_checkbox.set_function(lambda: manager.toggle_module(rgb_module))
+    rgb_checkbox.set_function(lambda: frame_box.fix_rgb(rgb_checkbox.state()))
     rgb_checkbox.click()
     rgb_checkbox.toggle_element(False)
     streamer.get_signal().connect_(rgb_checkbox.toggle_element)
@@ -115,7 +110,7 @@ def main():
             :param prop: переменная-ключ параметра камеры
             :param bounds: границы изменения параметра
             :param multiplier: множитель отправляемого значения
-            :return:
+            :return: объект класса _AbstractSlider
         """
         # dial = Dial(bounds=bounds, description=name, disable=True)
         dial = Slider(bounds=bounds, description=name, disable=True)
@@ -126,14 +121,12 @@ def main():
         streamer.get_signal().connect_(lambda val: dial.toggle_element(val and not adjs_checkbox.state()))
         return dial
 
-    expo_dial = setup_slider("Exposure", CAP_PROP_EXPOSURE, (0, 8), -1)
-    cont_dial = setup_slider("Contrast", CAP_PROP_CONTRAST, (0, 255), 1)
-    bright_dial = setup_slider("Brightness", CAP_PROP_BRIGHTNESS, (0, 255), 1)
-    satur_dial = setup_slider("Saturation", CAP_PROP_SATURATION, (0, 255), 1)
+    flow_layout.add_element(setup_slider("Exposure", CAP_PROP_EXPOSURE, (0, 8), -1))
+    flow_layout.add_element(setup_slider("Contrast", CAP_PROP_CONTRAST, (0, 255), 1))
+    flow_layout.add_element(setup_slider("Brightness", CAP_PROP_BRIGHTNESS, (0, 255), 1))
+    flow_layout.add_element(setup_slider("Saturation", CAP_PROP_SATURATION, (0, 255), 1))
     # gain is not supported on Raspberry Pi
-    # flow_layout.add_element(setup_slider("Gain", CAP_PROP_GAIN, (0, 255), 1))
-
-    flow_layout.add_all(bright_dial, cont_dial, expo_dial, satur_dial)
+    flow_layout.add_element(setup_slider("Gain", CAP_PROP_GAIN, (0, 255), 1))
     adjust_tab.add_all(adjs_checkbox, flow_layout)
 
     """
