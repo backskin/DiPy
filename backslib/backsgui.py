@@ -418,11 +418,14 @@ class Window:
         self._window.setWindowTitle(title)
         self._before_close_routine = []
         self._window.closeEvent = lambda event: self._close_event_handler()
-        self._menu_bar = self._window.menuBar()
-        self._menu_list = {}
+        self._menu_bar = None
+        self._menu_list = None
         self._status_bar = self._window.statusBar()
 
     def add_menu(self, title: str):
+        if self._menu_bar is None:
+            self._menu_bar = self._window.menuBar()
+            self._menu_list = {}
         self._menu_list[title] = self._menu_bar.addMenu(title)
 
     def add_menu_action(self, menu_title: str, action_name: str, function):
