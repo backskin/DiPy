@@ -146,6 +146,8 @@ class ImageBox(_UIElement):
         :param picture: изображение формата OpenCV/cv2 (numpy.ndarray)
         :return: ничего
         """
+        if picture is None:
+            return
         h, w, channels = picture.shape
         bpl = channels * w  # bytes per line
         q_img = QImage(picture.data, w, h, bpl, QImage.Format_RGB888)
@@ -166,7 +168,9 @@ class _AbstractSlider(_UIElement):
     def define_reset_method(self, func):
         self._def_val_func = func
 
-    def reset(self):
+    def reset(self, passed: bool = False):
+        if passed:
+            return
         self._widget.setValue(self._def_val_func())
 
     def link_value(self, setter):

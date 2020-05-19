@@ -1,4 +1,4 @@
-from backslib import FrameSignal
+# from backslib import FrameSignal
 
 
 class ProcessorModule:
@@ -6,6 +6,7 @@ class ProcessorModule:
     Абстрактный класс-предок для построения модулей, подключаемых к
     обработчику потока изображений
     """
+
     def __init__(self):
         pass
 
@@ -36,15 +37,13 @@ class ImageProcessor:
     из независимых модулей, которые можно добавлять, убирать, определять
     их положение в очереди.
     """
+
     def __init__(self):
-        self._outer_frame_signal = FrameSignal()  # сигнал кадра на выходе
-        self._inner_frame_signal = FrameSignal()  # сигнал кадра на входе
-        self._inner_frame_signal.connect_(lambda: self._modular_processing(self._inner_frame_signal.picture()))
-        self._modules = []  # Я не знаю почему, но мне пришлось неинтуитивно
-        # Поменять местами функции :add_module_last и :add_module_first, в связи с их неверной работой
-        # т.е. сейчас почему-то (может я чего не понял) если вставлять в позицию 0, то это будет
-        # последний элемент для for. И наоборот - если вставлять через append, то это элемент будет последним
-        self._modules_places = {}
+        # self._input_frame_signal = FrameSignal()  # сигнал кадра на входе
+        # self._output_frame_signal = FrameSignal()  # сигнал кадра на выходе
+        self._modules = []  # очередь модулей обработчика
+        self._modules_places = {}  # словарь, содержащий индексы встроенных модулей
+        # self._input_frame_signal.connect_(lambda frame: self._modular_processing(frame))
 
     def add_module_last(self, module: ProcessorModule):
         """
@@ -54,8 +53,8 @@ class ImageProcessor:
         if module in self._modules:
             return
         module.__startup__()
-        self._modules.insert(0, module)
-        self._modules_places[module] = 0
+        self._modules.append(module)
+        self._modules_places[module] = len(self._modules) - 1
 
     def add_module_first(self, module: ProcessorModule):
         """
@@ -65,8 +64,8 @@ class ImageProcessor:
         if module in self._modules:
             return
         module.__startup__()
-        self._modules.append(module)
-        self._modules_places[module] = len(self._modules)-1
+        self._modules.insert(0, module)
+        self._modules_places[module] = 0
 
     def add_module_precise(self, index: int, module: ProcessorModule):
         """
@@ -77,18 +76,19 @@ class ImageProcessor:
         """
         if module in self._modules:
             return
-        true_index = len(self._modules)-index-1
         module.__startup__()
-        self._modules.insert(true_index, module)
-        self._modules_places[module] = true_index
+        self._modules.insert(index, module)
+        self._modules_places[module] = index
 
-    def toggle_module(self, module: ProcessorModule):
+    def toggle_module(self, module: ProcessorModule, append: bool = False):
         """
         Метод переключения модуля. Работает как тумблер (вкл/выкл)
-        При стартовом включении устанавливает модуль в конец очереди,
+        При стартовом включении устанавливает модуль в начало очереди,
+        (либо в конец, если :param append == True)
         если объект был в очереди ранее, возвращает его
         на последнюю занимаемую позицию в очереди
-        :param module:
+        :param module: встраиваемый модуль
+        :param append: опция вставки элемента в конец очереди
         """
         if module in self._modules:
             module.__finish__()
@@ -97,6 +97,8 @@ class ImageProcessor:
             module.__startup__()
             if module in self._modules_places:
                 self._modules.insert(self._modules_places[module], module)
+            elif append:
+                self._modules.append(module)
             else:
                 self._modules.insert(0, module)
 
@@ -133,7 +135,8 @@ class ImageProcessor:
         его на обработку модулями
         :param frame: входящий в обработчик кадр
         """
-        self._inner_frame_signal.set(frame)
+        # self._input_frame_signal.set(frame)
+        self._modular_processing(frame)
 
     def _modular_processing(self, frame):
         """
@@ -142,11 +145,11 @@ class ImageProcessor:
         """
         for module in self._modules:
             frame = module.__processing__(frame)
-        self._outer_frame_signal.set(frame)
+        # self._output_frame_signal.set(frame)
 
-    def get_frame_signal(self):
-        """
-        Возвращает _исходящий_ кадр-сигнал
-        :return:
-        """
-        return self._outer_frame_signal
+    # def get_output_frame_signal(self):
+    #     """
+    #     Возвращает _исходящий_ кадр-сигнал
+    #     :return:
+    #     """
+    #     return self._output_frame_signal

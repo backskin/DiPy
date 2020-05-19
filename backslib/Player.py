@@ -15,11 +15,14 @@ class Player:
     """
     def __init__(self):
         self._signal = BoolSignal()
-        self._speed = 0
-        self._play_signal = self._signal.positive_signal()
-        self._stop_signal = self._signal.negative_signal()
-        self._play_signal.connect_(self.__play__)
-        self._stop_signal.connect_(self.__stop__)
+        self._speed = 0.
+        self._signal.connect_(self._player_slot)
+
+    def _player_slot(self, value):
+        if value:
+            self.__play__()
+        else:
+            self.__stop__()
 
     def get_signal(self) -> BoolSignal:
         """
@@ -29,13 +32,7 @@ class Player:
         """
         return self._signal
 
-    def get_play_signal(self) -> Signal:
-        return self._play_signal
-
-    def get_stop_signal(self) -> Signal:
-        return self._stop_signal
-
-    def get_speed(self):
+    def get_speed(self) -> float:
         return self._speed
 
     def set_speed(self, speed):
@@ -147,14 +144,14 @@ class VideoRecorder(Player):
     def __play__(self):
         self._frame_signal.connect_(self._initialize_record)
 
-    def _initialize_record(self):
+    def _initialize_record(self, frame):
         self._frame_signal.disconnect_()
         from datetime import datetime
         from cv2 import VideoWriter_fourcc as CVCodec
-        h, w = self._frame_signal.picture().shape[:2]
+        h, w = frame.shape[:2]
         self._filename = "record_" + datetime.now().strftime("%Y%m%d_%H%M%S")
         self._output = VideoWriter(self._filename + '.avi', CVCodec(*'XVID'), self._speed, (w, h))
-        self._frame_signal.connect_(lambda: self._output.write(self._frame_signal.picture()))
+        self._frame_signal.connect_( self._output.write)
 
     def __stop__(self):
         if self._output is not None:
