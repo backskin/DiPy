@@ -60,13 +60,13 @@ class Signal(QObject):
     данный, дабы определять, какая _именно_ информация будет храниться
     в качестве сигнала (флаг, изображение, текст и т.д).
     """
-    _signal = pyqtSignal()
+    _signal = pyqtSignal(object)
 
     def __init__(self):
         super().__init__()
 
-    def __emit__(self):
-        self._signal.emit()
+    def __emit__(self, obj):
+        self._signal.emit(obj)
 
     def connect_(self, function):
         self._signal.connect(function)
@@ -89,41 +89,13 @@ class BoolSignal(Signal):
     def set(self, val: bool):
         if val != self._val:
             self._val = val
-            self.__emit__()
+            self.__emit__(val)
 
     def toggle(self):
         self.set(not self.value())
 
-    def positive_signal(self):
-        return PNSignal(self, True)
-
-    def negative_signal(self):
-        return PNSignal(self, False)
-
     def value(self):
         return self._val
-
-
-class PNSignal(Signal):
-    """
-    PNSignal - модификация BoolSignal, а точнее "сигнал сигнала",
-               нужен для вызова определённых методов _исключительно_
-               при переключении BoolSignal объекта на конкретное значение,
-               указываемое в конструкторе класса
-    """
-
-    def __init__(self, bool_signal: BoolSignal, track_value: bool = True):
-        """
-        :param bool_signal: отслеживаемый сигнал
-        :param track_value: отслеживаемое значение сигнала (True или False)
-        """
-        super().__init__()
-        self._track_val = track_value
-        bool_signal.connect_(lambda: self._emit(bool_signal.value()))
-
-    def _emit(self, value: bool):
-        if value == self._track_val:
-            self.__emit__()
 
 
 class FrameSignal(Signal):
@@ -131,7 +103,6 @@ class FrameSignal(Signal):
     FrameSignal - сигнал, хранящий изображение в качестве информации.
     Вызывает __emit__ в случае попытки обновить изображение
     """
-    _signal = pyqtSignal()
 
     def __init__(self, pic=None):
         super().__init__()
@@ -145,7 +116,4 @@ class FrameSignal(Signal):
         """
         if self._pic is not picture:
             self._pic = picture
-            self.__emit__()
-
-    def picture(self):
-        return self._pic
+            self.__emit__(picture)

@@ -1,3 +1,5 @@
+from threading import Thread
+
 from backslib import FrameSignal
 
 
@@ -37,14 +39,15 @@ class ImageProcessor:
     их положение в очереди.
     """
     def __init__(self):
-        self._outer_frame_signal = FrameSignal()  # сигнал кадра на выходе
-        self._inner_frame_signal = FrameSignal()  # сигнал кадра на входе
-        self._inner_frame_signal.connect_(lambda: self._modular_processing(self._inner_frame_signal.picture()))
-        self._modules = []  # Я не знаю почему, но мне пришлось неинтуитивно
+        # self._input_frame_signal = FrameSignal()  # сигнал кадра на входе
+        self._output_frame_signal = FrameSignal()  # сигнал кадра на выходе
+        self._modules = []  # очередь модулей обработчика
+        # Я не знаю почему, но мне пришлось неинтуитивно
         # Поменять местами функции :add_module_last и :add_module_first, в связи с их неверной работой
         # т.е. сейчас почему-то (может я чего не понял) если вставлять в позицию 0, то это будет
         # последний элемент для for. И наоборот - если вставлять через append, то это элемент будет последним
-        self._modules_places = {}
+        self._modules_places = {}  # словарь, содержащий индексы встроенных модулей
+        # self._input_frame_signal.connect_(lambda frame: self._modular_processing(frame))
 
     def add_module_last(self, module: ProcessorModule):
         """
@@ -133,7 +136,8 @@ class ImageProcessor:
         его на обработку модулями
         :param frame: входящий в обработчик кадр
         """
-        self._inner_frame_signal.set(frame)
+        # self._input_frame_signal.set(frame)
+        self._modular_processing(frame)
 
     def _modular_processing(self, frame):
         """
@@ -142,11 +146,11 @@ class ImageProcessor:
         """
         for module in self._modules:
             frame = module.__processing__(frame)
-        self._outer_frame_signal.set(frame)
+        self._output_frame_signal.set(frame)
 
-    def get_frame_signal(self):
+    def get_output_frame_signal(self):
         """
         Возвращает _исходящий_ кадр-сигнал
         :return:
         """
-        return self._outer_frame_signal
+        return self._output_frame_signal

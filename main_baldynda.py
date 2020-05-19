@@ -3,7 +3,6 @@
 Все остальные несовместимы с одной из систем.
 """
 
-
 from cv2.cv2 import CAP_PROP_BRIGHTNESS, CAP_PROP_CONTRAST, CAP_PROP_EXPOSURE, CAP_PROP_SATURATION, CAP_PROP_GAIN
 
 from backslib.backsgui import Application, HorizontalLayout, VerticalLayout, TabManager, TabElement, \
@@ -11,7 +10,8 @@ from backslib.backsgui import Application, HorizontalLayout, VerticalLayout, Tab
 from backslib.ImageProcessor import ImageProcessor
 from backslib import load_picture
 from backslib.Player import Streamer
-from external_modules import RGBProcessorModule, RecordProcessorModule, SimpleMovementModule, OpenCVObjectDetector
+from external_modules import RGBProcessorModule, RecordProcessorModule, SimpleMovementModule, \
+    OpenCVObjectDetector, MobileNetSSDDetector
 
 STANDBY_PICTURE = load_picture('off.jpg')
 
@@ -32,14 +32,12 @@ def main():
     manager = ImageProcessor()
     streamer = Streamer(manager.catch)
     recorder = RecordProcessorModule()
-    recorder.get_play_signal().connect_(
-        lambda: window.bottom_message("Начата запись с камеры..."))
-    recorder.get_stop_signal().connect_(
-        lambda: window.bottom_message("Видео сохранено как '" + recorder.get_filename() + "'!"))
-    streamer.get_play_signal().connect_(
-        lambda: window.bottom_message("Стрим начат "+datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-    streamer.get_stop_signal().connect_(
-        lambda: window.bottom_message('Стрим приостановлен'))
+    recorder.get_signal().connect_(
+        lambda val: window.bottom_message(
+            "Начата запись с камеры..." if val else "Видео сохранено как '" + recorder.get_filename() + "'!"))
+    streamer.get_signal().connect_(
+        lambda val: window.bottom_message(
+            "Стрим начат "+datetime.now().strftime("%Y-%m-%d %H:%M:%S") if val else 'Стрим приостановлен'))
     from cv2.cv2 import CAP_PROP_FPS as FPS_PROPERTY
     recorder.set_speed(streamer.get_property(FPS_PROPERTY))
     """
@@ -47,8 +45,8 @@ def main():
     Связь с сигналами стримера и обработчика.
     """
     frame_box = ImageBox(STANDBY_PICTURE)
-    manager.get_frame_signal().connect_(lambda: frame_box.show_picture(manager.get_frame_signal().picture()))
-    streamer.get_stop_signal().connect_(lambda: frame_box.show_picture(STANDBY_PICTURE))
+    manager.get_output_frame_signal().connect_(lambda frame: frame_box.show_picture(frame))
+    streamer.get_signal().connect_(lambda val: frame_box.show_picture(STANDBY_PICTURE if not val else None))
     """
     Здесь начинаются вкладки на рабочей области
     """
@@ -68,7 +66,7 @@ def main():
     button_pause = Button("Pause", disable=True)
     button_play.set_function(streamer.play)
     button_pause.set_function(streamer.stop)
-    streamer.get_signal().connect_(button_play.toggle_element)
+    streamer.get_signal().connect_(lambda val: button_play.toggle_element(not val))
     streamer.get_signal().connect_(button_pause.toggle_element)
     separator = Separator()
     fps_items = ("2 FPS", "3 FPS", "4 FPS", "6 FPS", "12 FPS", "16 FPS", "24 FPS", "30 FPS")
@@ -76,7 +74,7 @@ def main():
     fps_combobox.send_value_to(streamer.set_speed)
     fps_combobox.send_value_to(recorder.set_speed)
     fps_combobox.set_index(len(fps_items) - 1)
-    streamer.get_signal().connect_(fps_combobox.toggle_element)
+    streamer.get_signal().connect_(lambda val: fps_combobox.toggle_element(not val))
     rgb_module = RGBProcessorModule()
     rgb_checkbox = CheckBox("Fix RGB")
     rgb_checkbox.set_function(lambda: manager.toggle_module(rgb_module))
@@ -85,16 +83,13 @@ def main():
     streamer.get_signal().connect_(rgb_checkbox.toggle_element)
     sec_sep = Separator()
     button_start_rec = Button("Start Rec.", disable=True)
-    button_start_rec.set_function(lambda: manager.add_module_last(recorder))
+    button_start_rec.set_function(lambda val: manager.add_module_last(recorder))
     button_stop_rec = Button("Stop Rec.", disable=True)
-    button_stop_rec.set_function(lambda: manager.remove_module(recorder))
+    button_stop_rec.set_function(lambda val: manager.remove_module(recorder))
 
-    streamer.get_play_signal().connect_(lambda: button_start_rec.toggle_element(True))
-    streamer.get_stop_signal().connect_(lambda: button_start_rec.toggle_element(False))
-    recorder.get_play_signal().connect_(lambda: button_start_rec.toggle_element(False))
-    recorder.get_play_signal().connect_(lambda: button_stop_rec.toggle_element(True))
-    recorder.get_stop_signal().connect_(lambda: button_stop_rec.toggle_element(False))
-    recorder.get_stop_signal().connect_(lambda: button_start_rec.toggle_element(streamer.get_signal().value()))
+    streamer.get_signal().connect_(lambda val: button_start_rec.toggle_element(val))
+    recorder.get_signal().connect_(lambda val: button_start_rec.toggle_element(not val and streamer.get_signal().value()))
+    recorder.get_signal().connect_(lambda val: button_stop_rec.toggle_element(val))
 
     control_tab.add_all(button_play, button_pause, separator,
                         fps_combobox, rgb_checkbox, sec_sep,
@@ -113,7 +108,7 @@ def main():
     flow_layout = VerticalLayout() # FlowLayout()
     streamer.get_signal().connect_(adjs_checkbox.toggle_element)
 
-    def setup_dial(name, prop, bounds, multiplier):
+    def setup_slider(name, prop, bounds, multiplier):
         """ Метод настраивает ползунок под конкретный параметр камеры.
             Подключает его к конкретному параметру стримера, связывает с чекбоксом вкладки.
             :param name: Имя ползунка
@@ -127,17 +122,16 @@ def main():
         dial.define_reset_method(lambda: multiplier * streamer.get_property(prop))
         dial.link_value(lambda val: streamer.set_property(prop, multiplier * val))
         adjs_checkbox.set_function(lambda: dial.toggle_element(not adjs_checkbox.state()))
-        streamer.get_play_signal().connect_(dial.reset)
-        streamer.get_play_signal().connect_(lambda: dial.toggle_element(not adjs_checkbox.state()))
-        streamer.get_stop_signal().connect_(lambda: dial.toggle_element(False))
+        streamer.get_signal().connect_(lambda val: dial.reset(not val))
+        streamer.get_signal().connect_(lambda val: dial.toggle_element(val and not adjs_checkbox.state()))
         return dial
 
-    expo_dial = setup_dial("Exposure", CAP_PROP_EXPOSURE, (1, 8), 1)
-    cont_dial = setup_dial("Contrast", CAP_PROP_CONTRAST, (0, 255), 1)
-    bright_dial = setup_dial("Brightness", CAP_PROP_BRIGHTNESS, (0, 255), 1)
-    satur_dial = setup_dial("Saturation", CAP_PROP_SATURATION, (0, 255), 1)
+    expo_dial = setup_slider("Exposure", CAP_PROP_EXPOSURE, (0, 8), -1)
+    cont_dial = setup_slider("Contrast", CAP_PROP_CONTRAST, (0, 255), 1)
+    bright_dial = setup_slider("Brightness", CAP_PROP_BRIGHTNESS, (0, 255), 1)
+    satur_dial = setup_slider("Saturation", CAP_PROP_SATURATION, (0, 255), 1)
     # gain is not supported on Raspberry Pi
-    # flow_layout.add_element(setup_dial("Gain", CAP_PROP_GAIN, (0, 255), 1))
+    # flow_layout.add_element(setup_slider("Gain", CAP_PROP_GAIN, (0, 255), 1))
 
     flow_layout.add_all(bright_dial, cont_dial, expo_dial, satur_dial)
     adjust_tab.add_all(adjs_checkbox, flow_layout)
@@ -159,9 +153,9 @@ def main():
     mvm_checkbox = setup_detector_checkbox('Simple Movement det.', simple_movement_module)
     detect_tab.add_element(mvm_checkbox)
 
-    ocv_detector = OpenCVObjectDetector()
-    ocv_checkbox = setup_detector_checkbox('OCV det.', ocv_detector)
-    detect_tab.add_element(ocv_checkbox)
+    mobilenetssd_detector = MobileNetSSDDetector()
+    mssd_checkbox = setup_detector_checkbox('MobileNet SSD det.', mobilenetssd_detector)
+    detect_tab.add_element(mssd_checkbox)
     """
     Завершающая часть настройки внешнего вида и управления
     """
