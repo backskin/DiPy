@@ -1,6 +1,3 @@
-# from backslib import FrameSignal
-
-
 class ProcessorModule:
     """
     Абстрактный класс-предок для построения модулей, подключаемых к

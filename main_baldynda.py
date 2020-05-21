@@ -48,6 +48,7 @@ def main():
     """
     tabs = TabManager()
     tabs.set_tabs_position(pos='l')
+    tabs.set_max_width(480)
     """
     Вкладка управления потоком. Содержит: 
         кнопки Play/Pause Stream; Start/Stop Rec.
@@ -55,7 +56,7 @@ def main():
         Выпадающий список скорости потока (кадры в секунду)
     """
     control_tab = TabElement("Control")
-    control_tab.set_max_height(320)
+    control_tab.set_max_height(480)
     control_tab.set_min_width(240)
     control_tab.set_padding(24, 8, 24, 8)
     button_play = Button("Play")
@@ -66,6 +67,9 @@ def main():
     streamer.get_signal().connect_(button_pause.toggle_element)
     separator = Separator()
     fps_items = ("2 FPS", "3 FPS", "4 FPS", "6 FPS", "12 FPS", "16 FPS", "24 FPS", "30 FPS")
+    flip_checkbox = CheckBox('Flip Image', disable=True)
+    flip_checkbox.set_function(streamer.flip_toggle)
+    streamer.get_signal().connect_(flip_checkbox.toggle_element)
     fps_combobox = NumericComboBox(fps_items, "FPS setting")
     fps_combobox.send_value_to(streamer.set_speed)
     fps_combobox.send_value_to(recorder.set_speed)
@@ -87,6 +91,7 @@ def main():
     recorder.get_signal().connect_(lambda val: button_stop_rec.toggle_element(val))
 
     control_tab.add_all(button_play, button_pause, separator,
+                        flip_checkbox,
                         fps_combobox, rgb_checkbox, sec_sep,
                         button_start_rec, button_stop_rec)
 

@@ -38,55 +38,55 @@ class _UIElement:
         """
         super().__init__()
         self._out_widget = QFrame()
-        self._widget = widget
+        self._inner_widget = widget
         self._layout = QVBoxLayout() if layout is None else layout
         self._layout.setContentsMargins(2, 2, 2, 2)
         if description is not None:
             self._layout.addWidget(QLabel(description), alignment=Qt.AlignCenter)
         if widget is not None:
             widget.setDisabled(disable)
-            self._layout.addWidget(self._widget)
+            self._layout.addWidget(self._inner_widget)
         self._out_widget.setLayout(self._layout)
 
     def toggle_element(self, state=None):
-        if self._widget is not None:
-            self._widget.setDisabled(self._widget.isEnabled() if state is None else not state)
+        if self._inner_widget is not None:
+            self._inner_widget.setDisabled(self._inner_widget.isEnabled() if state is None else not state)
 
     def set_max_width(self, width):
-        if self._widget is None:
+        if self._inner_widget is None:
             self._out_widget.setMaximumWidth(width)
         else:
-            self._widget.setMaximumWidth(width)
+            self._inner_widget.setMaximumWidth(width)
 
     def set_max_height(self, height):
-        if self._widget is None:
+        if self._inner_widget is None:
             self._out_widget.setMaximumHeight(height)
         else:
-            self._widget.setMaximumHeight(height)
+            self._inner_widget.setMaximumHeight(height)
 
     def set_fixed_width(self, width):
-        if self._widget is None:
+        if self._inner_widget is None:
             self._out_widget.setFixedWidth(width)
         else:
-            self._widget.setFixedWidth(width)
+            self._inner_widget.setFixedWidth(width)
 
     def set_fixed_height(self, height):
-        if self._widget is None:
+        if self._inner_widget is None:
             self._out_widget.setFixedHeight(height)
         else:
-            self._widget.setFixedHeight(height)
+            self._inner_widget.setFixedHeight(height)
 
     def set_min_width(self, width):
-        if self._widget is None:
+        if self._inner_widget is None:
             self._out_widget.setMinimumWidth(width)
         else:
-            self._widget.setMinimumWidth(width)
+            self._inner_widget.setMinimumWidth(width)
 
     def set_min_height(self, height):
-        if self._widget is None:
+        if self._inner_widget is None:
             self._out_widget.setMinimumHeight(height)
         else:
-            self._widget.setMinimumHeight(height)
+            self._inner_widget.setMinimumHeight(height)
 
     def __layout__(self) -> QLayout:
         return self._out_widget.layout()
@@ -104,7 +104,7 @@ class Label(_UIElement):
         super().__init__(widget=QLabel(text))
 
     def set_text(self, text: str):
-        self._widget.setText(text)
+        self._inner_widget.setText(text)
 
 
 class Separator(_UIElement):
@@ -151,19 +151,19 @@ class ImageBox(_UIElement):
         h, w, channels = picture.shape
         bpl = channels * w  # bytes per line
         q_img = QImage(picture.data, w, h, bpl, QImage.Format_RGB888)
-        self._widget.setPixmap(QPixmap(q_img))
+        self._inner_widget.setPixmap(QPixmap(q_img))
 
 
 class _AbstractSlider(_UIElement):
     def __init__(self, widget: QSlider or QDial, bounds: tuple, description: str = None, disable=False):
         super().__init__(widget, description=description, disable=disable)
-        self._widget.setMinimum(bounds[0])
-        self._widget.setMaximum(bounds[1])
+        self._inner_widget.setMinimum(bounds[0])
+        self._inner_widget.setMaximum(bounds[1])
         self._val_label = QLabel('0')
         self._def_val_func = lambda: 1
         self._val_label.setAlignment(Qt.AlignHCenter)
         self.__layout__().addWidget(self._val_label)
-        self._widget.valueChanged.connect(lambda: self._val_label.setText(str(self._widget.value())))
+        self._inner_widget.valueChanged.connect(lambda: self._val_label.setText(str(self._inner_widget.value())))
 
     def define_reset_method(self, func):
         self._def_val_func = func
@@ -171,13 +171,13 @@ class _AbstractSlider(_UIElement):
     def reset(self, passed: bool = False):
         if passed:
             return
-        self._widget.setValue(self._def_val_func())
+        self._inner_widget.setValue(self._def_val_func())
 
     def link_value(self, setter):
-        self._widget.valueChanged.connect(lambda: setter(self._widget.value()))
+        self._inner_widget.valueChanged.connect(lambda: setter(self._inner_widget.value()))
 
     def __set_custom_value__(self, value):
-        self._widget.setValue(value)
+        self._inner_widget.setValue(value)
 
 
 class Dial(_AbstractSlider):
@@ -195,11 +195,11 @@ class Slider(_AbstractSlider):
 class SpinBox(_UIElement):
     def __init__(self, description: str, bounds: tuple):
         super().__init__(QSpinBox(), description=description)
-        self._widget.setMinimum(bounds[0])
-        self._widget.setMaximum(bounds[1])
+        self._inner_widget.setMinimum(bounds[0])
+        self._inner_widget.setMaximum(bounds[1])
 
     def set_operation(self, function):
-        self._widget.valueChanged.connect(function)
+        self._inner_widget.valueChanged.connect(function)
         return self
 
 
@@ -208,13 +208,13 @@ class _AbstractButton(_UIElement):
         super().__init__(widget=button, layout=QHBoxLayout(), disable=disable)
 
     def set_function(self, function):
-        self._widget.clicked.connect(function)
+        self._inner_widget.clicked.connect(function)
 
     def click(self):
-        self._widget.click()
+        self._inner_widget.click()
 
     def is_enabled(self):
-        return self._widget.isEnabled()
+        return self._inner_widget.isEnabled()
 
 
 class Button(_AbstractButton):
@@ -225,13 +225,13 @@ class Button(_AbstractButton):
 class CheckBox(_AbstractButton):
     def __init__(self, description: str, disable=False):
         super().__init__(QCheckBox(description), disable)
-        self._widget.setDisabled(disable)
+        self._inner_widget.setDisabled(disable)
 
     def state(self):
-        return self._widget.checkState()
+        return self._inner_widget.checkState()
 
     def set_checked(self, state: bool):
-        self._widget.setChecked(state)
+        self._inner_widget.setChecked(state)
 
 
 class RadioButton(_AbstractButton):
@@ -239,10 +239,10 @@ class RadioButton(_AbstractButton):
         super().__init__(QRadioButton(description), disable)
 
     def state(self):
-        return self._widget.toggled()
+        return self._inner_widget.toggled()
 
     def set_function(self, function):
-        self._widget.toggled.connect(function)
+        self._inner_widget.toggled.connect(function)
 
 
 class NumericComboBox(_UIElement):
@@ -262,9 +262,9 @@ class NumericComboBox(_UIElement):
         super().__init__(widget=self._combo, description=description)
         self._combo.addItems(items)
         if fnc is not None:
-            self._widget.currentIndexChanged.connect(
+            self._inner_widget.currentIndexChanged.connect(
                 lambda: fnc(self.__get_value__()))
-        self._widget.setDisabled(disable)
+        self._inner_widget.setDisabled(disable)
 
     def __get_value__(self):
         """
@@ -284,10 +284,10 @@ class NumericComboBox(_UIElement):
         :param fnc:
         :return:
         """
-        self._widget.currentIndexChanged.connect(lambda: fnc(self.__get_value__()))
+        self._inner_widget.currentIndexChanged.connect(lambda: fnc(self.__get_value__()))
 
     def set_index(self, index: int):
-        self._widget.setCurrentIndex(index)
+        self._inner_widget.setCurrentIndex(index)
 
 
 class StatusBar(_UIElement):
@@ -393,7 +393,7 @@ class TabManager(_UIElement):
         :param tab: a TabElement object, (not QWidget!)
         :return: nothing
         """
-        self._widget.addTab(tab.__widget__(), tab.__tab_name__())
+        self._inner_widget.addTab(tab.__widget__(), tab.__tab_name__())
         self.__layout__().setAlignment(Qt.AlignCenter)
 
     def set_tabs_position(self, pos: str = 'u'):
@@ -404,7 +404,7 @@ class TabManager(_UIElement):
                     'u' or any other - for upper position
         :return: nothing.
         """
-        self._widget.setTabPosition(
+        self._inner_widget.setTabPosition(
             QTabWidget.West if pos == 'l' else
             QTabWidget.East if pos == 'r' else
             QTabWidget.South if pos == 'd' else
