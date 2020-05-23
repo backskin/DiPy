@@ -9,8 +9,8 @@ from backslib.backsgui import Application, HorizontalLayout, VerticalLayout, Tab
     Button, CheckBox, Separator, NumericComboBox, Dial, Label, Slider
 from backslib.ImageProcessor import ImageProcessor
 from backslib.Player import Streamer
-from external_modules import RGBProcessorModule, RecordModule, SimpleMovementModule, \
-    MobileNetSSDDetector, ImageBoxModule
+from backslib.SecurityModule import SimpleMovementModule, MobileNetSSDDetector, YOLODetector
+from external_modules import RGBModule, RecordModule, ImageBoxModule
 
 
 def open_camera():
@@ -137,7 +137,7 @@ def main():
     """
     Вкладка управления компьютерным зрением и охранной системой.
     """
-    detect_tab = TabElement("Detection")
+    detect_tab = TabElement("Security")
     detect_tab.set_padding(16, 16, 0, 0)
     detect_tab.add_element(Label("Detectors toggles:"))
 
@@ -154,6 +154,14 @@ def main():
     mobilenetssd_detector = MobileNetSSDDetector()
     mssd_checkbox = setup_detector_checkbox('MobileNet SSD det.', mobilenetssd_detector)
     detect_tab.add_element(mssd_checkbox)
+
+    yolohard_detector = YOLODetector('yolo-coco')
+    yolohard_checkbox = setup_detector_checkbox('Yolo Hard det.', yolohard_detector)
+    detect_tab.add_element(yolohard_checkbox)
+
+    yolotiny_detector = YOLODetector('yolo3-tiny')
+    yolotiny_checkbox = setup_detector_checkbox('Yolo Tiny det.', yolotiny_detector)
+    detect_tab.add_element(yolotiny_checkbox)
     """
     Завершающая часть настройки внешнего вида и управления
     """

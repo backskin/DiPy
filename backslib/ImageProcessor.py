@@ -1,4 +1,4 @@
-class ProcessorModule:
+class Module:
     """
     Абстрактный класс-предок для построения модулей, подключаемых к
     обработчику потока изображений
@@ -42,7 +42,7 @@ class ImageProcessor:
         self._modules_places = {}  # словарь, содержащий индексы встроенных модулей
         # self._input_frame_signal.connect_(lambda frame: self._modular_processing(frame))
 
-    def add_module_last(self, module: ProcessorModule):
+    def add_module_last(self, module: Module):
         """
         Добавляет модуль в конец очереди. Не добавляет тот же модуль второй раз.
         :param module: встраиваемый модуль
@@ -53,7 +53,7 @@ class ImageProcessor:
         self._modules.append(module)
         self._modules_places[module] = len(self._modules) - 1
 
-    def add_module_first(self, module: ProcessorModule):
+    def add_module_first(self, module: Module):
         """
         Добавляет модуль в начало очереди. Не добавляет тот же модуль второй раз.
         :param module: встраиваемый модуль
@@ -64,7 +64,7 @@ class ImageProcessor:
         self._modules.insert(0, module)
         self._modules_places[module] = 0
 
-    def add_module_precise(self, index: int, module: ProcessorModule):
+    def add_module_precise(self, index: int, module: Module):
         """
         Добавляет модуль в точное положение в списке согласно входному индексу.
         Не добавляет тот же модуль второй раз.
@@ -77,7 +77,7 @@ class ImageProcessor:
         self._modules.insert(index, module)
         self._modules_places[module] = index
 
-    def toggle_module(self, module: ProcessorModule, append: bool = False):
+    def toggle_module(self, module: Module, append: bool = False):
         """
         Метод переключения модуля. Работает как тумблер (вкл/выкл)
         При стартовом включении устанавливает модуль в начало очереди,
@@ -99,7 +99,7 @@ class ImageProcessor:
             else:
                 self._modules.insert(0, module)
 
-    def get_module_place(self, module: ProcessorModule):
+    def get_module_place(self, module: Module):
         """
         Метод, возвращающий положение в очереди обработки
         конкретного модуля, определяемого параметром
@@ -112,7 +112,7 @@ class ImageProcessor:
         else:
             return -1
 
-    def remove_module(self, module: ProcessorModule):
+    def remove_module(self, module: Module):
         if module in self._modules:
             module.__finish__()
             self._modules.remove(module)

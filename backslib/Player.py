@@ -52,6 +52,9 @@ class Player:
 
 
 class Streamer(Player):
+    """
+
+    """
     def __init__(self, grabber, source=0):
         super().__init__()
         self._flip_state = False
@@ -128,7 +131,7 @@ class VideoRecorder(Player):
     def __init__(self):
 
         super().__init__()
-        self._size = (640, 480)  # default value
+        self._frame_size = (640, 480)  # default value
         self._output = None
         self._filename = 'template'
         self._output = None
