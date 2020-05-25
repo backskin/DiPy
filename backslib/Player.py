@@ -45,10 +45,42 @@ class Player:
         self._signal.set(False)
 
     def __play__(self):
-        pass
+        """
+        перезагружается в потомке
+        """
 
     def __stop__(self):
-        pass
+        """
+        перезагружается в потомке
+       """
+
+
+class SlideShow(Player):
+    def __init__(self, grabber, source=0):
+        super().__init__()
+        self._grab = grabber
+        self._source = source
+        self._thread = None
+
+    def set_source(self, source):
+        self._source = source
+
+    def __play__(self):
+        delay = 1. / self._speed if self._speed != 0 else None
+        self._thread = Thread(target=self._thread_func, args=(delay,))
+        self._thread.start()
+
+    def _thread_func(self, delay):
+        while self.get_signal().value():
+            time_start = clock()
+            if delay is not None:
+                precise_sleep(time_start, delay)
+
+    def __stop__(self):
+        self._thread.join()
+
+    def __close__(self):
+        self.get_signal().set(False)
 
 
 class Streamer(Player):
@@ -113,8 +145,6 @@ class Streamer(Player):
 
     def __close__(self):
         self.get_signal().set(False)
-        # if self._thread is not None and self._thread.is_alive():
-        #     self._thread.join()
         self._video_cap.release()
 
 
@@ -149,11 +179,13 @@ class VideoRecorder(Player):
 
     def _initialize_record(self, frame):
         self._frame_signal.disconnect_()
+        import os
         from datetime import datetime
         from cv2 import VideoWriter_fourcc as CVCodec
         h, w = frame.shape[:2]
         self._filename = "record_" + datetime.now().strftime("%Y%m%d_%H%M%S")
-        self._output = VideoWriter(self._filename + '.avi', CVCodec(*'XVID'), self._speed, (w, h))
+        self._output = VideoWriter('video-archive' + os.sep + self._filename + '.avi',
+                                   CVCodec(*'XVID'), self._speed, (w, h))
         self._frame_signal.connect_( self._output.write)
 
     def __stop__(self):

@@ -26,9 +26,11 @@ def delayed_start(func, delay):
     :param delay: время задержки вызова функции (в секундах с плавающей точкой)
     :return:
     """
+
     def do():
         sleep(delay)
         func()
+
     do_in_background(do)
 
 
@@ -75,13 +77,32 @@ class Signal(QObject):
         self._signal.disconnect()
 
 
+class ThresholdSignal(Signal):
+    """
+    ThresholdSignal - числовой сигнал, вызывает __emit() при
+    переходе за числовой порог
+    """
+    def __init__(self, threshold: int = 0, positive: bool = True):
+        super().__init__()
+        self._val = 0
+        self._th = threshold
+        self._sign_state = positive
+
+    def set(self, val:int):
+        if val != self._val:
+            self._val = val
+            self.__emit__(val)
+
+    def value(self) -> int:
+        return self._val
+
+
 class BoolSignal(Signal):
     """
     BoolSignal - бинарный сигнал, содержит bool поле,
     вызывает __emit__() при изменении состояния
     True на False, vice versa (именно изменении)
     """
-
     def __init__(self, def_val: bool = False):
         super().__init__()
         self._val = def_val
@@ -103,7 +124,6 @@ class FrameSignal(Signal):
     FrameSignal - сигнал, хранящий изображение в качестве информации.
     Вызывает __emit__ в случае попытки обновить изображение
     """
-
     def __init__(self, pic=None):
         super().__init__()
         self._pic = pic

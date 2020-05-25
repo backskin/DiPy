@@ -18,7 +18,8 @@ class RGBModule(Module):
 class ImageBoxModule(Module, ImageBox):
 
     def __init__(self):
-        self.STANDBY_PICTURE = load_picture('off.jpg')
+        import os
+        self.STANDBY_PICTURE = load_picture('resources'+os.sep+'off.jpg')
         Module.__init__(self)
         ImageBox.__init__(self, starter_pic=self.STANDBY_PICTURE)
         self._fix_rgb_state = False
@@ -61,3 +62,25 @@ class RecordModule(Module, VideoRecorder):
         self.stop()
 
 
+class ScreenShotModule(Module):
+
+    def __init__(self):
+        Module.__init__(self)
+        self._saved_frame = None
+        self._filename = 'None'
+
+    def get_name(self):
+        return self._filename
+
+    def __processing__(self, frame):
+        self._saved_frame = frame
+        return frame
+
+    def save_screenshot(self):
+        if self._saved_frame is None:
+            return
+        import cv2
+        import os
+        from datetime import datetime
+        self._filename = "screenshot_" + datetime.now().strftime("%Y%m%d_%H%M%S")+'.jpg'
+        cv2.imwrite('photo-archive' + os.path.sep + self._filename, self._saved_frame)

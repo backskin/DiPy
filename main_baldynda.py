@@ -9,8 +9,8 @@ from backslib.backsgui import Application, HorizontalLayout, VerticalLayout, Tab
     Button, CheckBox, Separator, NumericComboBox, Dial, Label, Slider
 from backslib.ImageProcessor import ImageProcessor
 from backslib.Player import Streamer
-from backslib.SecurityModule import SimpleMovementModule, MobileNetSSDDetector, YOLODetector
-from external_modules import RGBModule, RecordModule, ImageBoxModule
+from backslib.DetectorModule import SimpleMovementModule, CaffeDetector, YOLODetector
+from external_modules import RGBModule, RecordModule, ImageBoxModule, ScreenShotModule
 
 
 def open_camera():
@@ -58,7 +58,7 @@ def main():
     control_tab = TabElement("Control")
     control_tab.set_max_height(480)
     control_tab.set_min_width(240)
-    control_tab.set_padding(24, 8, 24, 8)
+    control_tab.set_padding(24, 16, 24, 8)
     button_play = Button("Play")
     button_pause = Button("Pause", disable=True)
     button_play.set_function(streamer.play)
@@ -73,7 +73,7 @@ def main():
     fps_combobox = NumericComboBox(fps_items, "FPS setting")
     fps_combobox.send_value_to(streamer.set_speed)
     fps_combobox.send_value_to(recorder.set_speed)
-    fps_combobox.set_index(len(fps_items) - 1)
+    fps_combobox.set_index(5)
     streamer.get_signal().connect_(lambda val: fps_combobox.toggle_element(not val))
     rgb_checkbox = CheckBox("Fix RGB")
     rgb_checkbox.set_function(lambda: frame_box.fix_rgb(rgb_checkbox.state()))
@@ -91,8 +91,8 @@ def main():
     recorder.get_signal().connect_(lambda val: button_stop_rec.toggle_element(val))
 
     control_tab.add_all(button_play, button_pause, separator,
-                        flip_checkbox,
-                        fps_combobox, rgb_checkbox, sec_sep,
+                        flip_checkbox, rgb_checkbox,
+                        fps_combobox, sec_sep,
                         button_start_rec, button_stop_rec)
 
     """
@@ -101,7 +101,7 @@ def main():
     Цветнось, Уровень (только для windows камер).
     """
     adjust_tab = TabElement("Adjustments")
-    adjust_tab.set_padding(16, 16, 16, 16)
+    adjust_tab.set_padding(24, 16, 24, 16)
     adjs_checkbox = CheckBox('Keep This Settings')
     adjs_checkbox.click()
     adjs_checkbox.toggle_element(False)
@@ -138,30 +138,42 @@ def main():
     Вкладка управления компьютерным зрением и охранной системой.
     """
     detect_tab = TabElement("Security")
-    detect_tab.set_padding(16, 16, 0, 0)
+    detect_tab.set_padding(24, 16, 24, 0)
+
+    ss_module = ScreenShotModule()
+    ss_button = Button('Make Screenshot', disable=True)
+    ss_button.set_function(ss_module.save_screenshot)
+    ss_button.set_function(lambda: window.bottom_message('Cкриншот сохранён как '+ss_module.get_name()+ ' !'))
+    streamer.get_signal().connect_(ss_button.toggle_element)
+    streamer.get_signal().connect_(lambda val: manager.toggle_module(ss_module))
+    detect_tab.add_element(ss_button)
+
     detect_tab.add_element(Label("Detectors toggles:"))
 
     def setup_detector_checkbox(name: str, module):
-        checkbox = CheckBox(name, disable=True)
-        checkbox.set_function(lambda: manager.toggle_module(module))
-        streamer.get_signal().connect_(checkbox.toggle_element)
-        return checkbox
+        box = CheckBox(name, disable=True)
+        detect_tab.add_element(box)
+        box.set_function(lambda: manager.toggle_module(module))
+        streamer.get_signal().connect_(lambda val: box.toggle_element(val))
+
+    def add_caffe_detector(path: str, name: str):
+        import os
+        module = CaffeDetector('neuralnetworks'+os.sep+path)
+        setup_detector_checkbox(name, module)
+
+    def add_yolo_detector(path: str, name: str):
+        import os
+        module = YOLODetector('neuralnetworks'+os.sep+path)
+        setup_detector_checkbox(name, module)
 
     simple_movement_module = SimpleMovementModule()
-    mvm_checkbox = setup_detector_checkbox('Simple Movement det.', simple_movement_module)
-    detect_tab.add_element(mvm_checkbox)
+    setup_detector_checkbox('Simple Movement det.', simple_movement_module)
 
-    mobilenetssd_detector = MobileNetSSDDetector()
-    mssd_checkbox = setup_detector_checkbox('MobileNet SSD det.', mobilenetssd_detector)
-    detect_tab.add_element(mssd_checkbox)
+    add_caffe_detector('mobilenet_ssd', 'MobileNet SSD det.')
+    add_caffe_detector('vggnet-ssd-300', 'VGGNet SSD 300 det.')
+    add_yolo_detector('yolo3-coco', 'YOLO Hard det.')
+    add_yolo_detector('yolo3-tiny', 'YOLO Tiny det.')
 
-    yolohard_detector = YOLODetector('yolo-coco')
-    yolohard_checkbox = setup_detector_checkbox('Yolo Hard det.', yolohard_detector)
-    detect_tab.add_element(yolohard_checkbox)
-
-    yolotiny_detector = YOLODetector('yolo3-tiny')
-    yolotiny_checkbox = setup_detector_checkbox('Yolo Tiny det.', yolotiny_detector)
-    detect_tab.add_element(yolotiny_checkbox)
     """
     Завершающая часть настройки внешнего вида и управления
     """
@@ -175,9 +187,6 @@ def main():
     layout.add_element(frame_layout)
     layout.add_element(tabs)
     window.set_main_layout(layout)
-    # window.add_menu("File")
-    # window.add_menu_action("File", "Load Media...", open_media)
-    # window.add_menu_action("File", "Open Camera", open_camera)
     window.add_method_on_close(manager.finish_all)
     window.add_method_on_close(streamer.__close__)
     app.start()
