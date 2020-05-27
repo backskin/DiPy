@@ -37,9 +37,6 @@ class FPSCounter:
 
 def main():
     folder = 'neuralnetworks' + os.sep + 'yolo-3-tiny' + os.sep
-    labels_path = folder + 'labels.names'
-    LABELS = open(labels_path).read().strip().split("\n")
-
     np.random.seed(1996)
     camera = cv2.VideoCapture(0)
     weights_path = folder + 'yolo.weights'
