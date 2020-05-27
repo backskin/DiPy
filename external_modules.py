@@ -4,22 +4,33 @@ from backslib.Player import VideoRecorder
 from backslib.backsgui import ImageBox
 
 
-class DummyModule(Module):
-    def __processing__(self, frame):
-        return frame
+class FPSCounter(Module):
+    GREEN = (0, 255, 0)
+    WHITE = (255, 255, 255)
+    BLACK = (0, 0, 0)
 
+    def __init__(self):
+        Module.__init__(self)
+        self._last_time = None
 
-class RGBModule(Module):
     def __processing__(self, frame):
-        from cv2 import cvtColor, COLOR_BGR2RGB
-        return None if frame is None else cvtColor(frame, COLOR_BGR2RGB)
+        import time
+        import cv2
+        if self._last_time is None:
+            self._last_time = time.time()
+        else:
+            fps_count = 1 / (time.time() - self._last_time)
+            fps_label = "{}: {:.2f}".format('FPS', fps_count)
+            cv2.rectangle(frame, (0, 0), (90, 20), FPSCounter.WHITE, thickness=-1)
+            cv2.putText(frame, fps_label, (0, 15),
+                        cv2.FONT_HERSHEY_DUPLEX, 0.5, FPSCounter.BLACK, 1)
+            self._last_time = time.time()
 
 
 class ImageBoxModule(Module, ImageBox):
-
     def __init__(self):
         import os
-        self.STANDBY_PICTURE = load_picture('resources'+os.sep+'off.jpg')
+        self.STANDBY_PICTURE = load_picture('resources' + os.sep + 'off.jpg')
         Module.__init__(self)
         ImageBox.__init__(self, starter_pic=self.STANDBY_PICTURE)
         self._fix_rgb_state = False
@@ -33,11 +44,9 @@ class ImageBoxModule(Module, ImageBox):
             self.show_picture(cvtColor(frame, COLOR_BGR2RGB))
         else:
             self.show_picture(frame)
-        return frame
 
     def __finish__(self):
         self.show_picture(self.STANDBY_PICTURE)
-        super().__finish__()
 
 
 class RecordModule(Module, VideoRecorder):
@@ -50,16 +59,9 @@ class RecordModule(Module, VideoRecorder):
     def __init__(self):
         Module.__init__(self)
         VideoRecorder.__init__(self)
-
-    def __startup__(self):
-        self.play()
-
-    def __processing__(self, frame):
-        self.put_frame(frame)
-        return frame
-
-    def __finish__(self):
-        self.stop()
+        self.__processing__ = self.put_frame
+        self.__startup__ = lambda this: self.play()
+        self.__finish__ = lambda this: self.stop()
 
 
 class ScreenShotModule(Module):
@@ -74,7 +76,6 @@ class ScreenShotModule(Module):
 
     def __processing__(self, frame):
         self._saved_frame = frame
-        return frame
 
     def save_screenshot(self):
         if self._saved_frame is None:
@@ -82,5 +83,5 @@ class ScreenShotModule(Module):
         import cv2
         import os
         from datetime import datetime
-        self._filename = "screenshot_" + datetime.now().strftime("%Y%m%d_%H%M%S")+'.jpg'
+        self._filename = "screenshot_" + datetime.now().strftime("%Y%m%d_%H%M%S") + '.jpg'
         cv2.imwrite('photo-archive' + os.path.sep + self._filename, self._saved_frame)

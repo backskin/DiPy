@@ -1,112 +1,89 @@
+import imutils
 import numpy as np
-import time
 import cv2
 import os
 
-folder = 'yolo-coco' + os.path.sep
-labels_path = folder + 'coco.names'
-LABELS = open(labels_path).read().strip().split("\n")
+def draw_rectangle(frame, coors, conf):
+    start_x, start_y, end_x, end_y = coors
+    label = "{}: {:.2f}%".format('person', conf * 100)
+    cv2.rectangle(frame, (start_x, start_y), (end_x, end_y),
+                  (255, 255, 255), 1)
+    y = start_y - 8 if start_y - 8 > 8 else start_y + 8
+    cv2.putText(frame, label, (start_x, y),
+                cv2.FONT_HERSHEY_PLAIN, 1, (255, 255, 255), 1)
 
-np.random.seed(1996)
-COLORS = np.random.randint(0, 255, size=(len(LABELS), 3),
-                           dtype="uint8")
+
+class FPSCounter:
+    GREEN = (0, 255, 0)
+    WHITE = (255, 255, 255)
+    BLACK = (0, 0, 0)
+
+    def __init__(self):
+        self._last_time = None
+
+    def proc(self, frame):
+        import time
+        import cv2
+        if self._last_time is None:
+            self._last_time = time.time()
+        else:
+            fps_count = 1 / (time.time() - self._last_time + 0.0001)
+            fps_label = "{}: {:.2f}".format('FPS', fps_count)
+            cv2.rectangle(frame, (0, 0), (87, 22), FPSCounter.WHITE, thickness=-1)
+            cv2.putText(frame, fps_label, (0, 15),
+                        cv2.FONT_HERSHEY_PLAIN, 1, FPSCounter.BLACK, 1)
+            self._last_time = time.time()
 
 
 def main():
-    # load the COCO class labels our YOLO model was trained on
-    # initialize a list of colors to represent each possible class label
-    # derive the paths to the YOLO weights and model configuration
-    weights_path = folder + 'yolov3.weights'
-    config_path = folder + 'yolov3.cfg'
+    folder = 'neuralnetworks' + os.sep + 'yolo-3-tiny' + os.sep
+    labels_path = folder + 'labels.names'
+    LABELS = open(labels_path).read().strip().split("\n")
+
+    np.random.seed(1996)
+    camera = cv2.VideoCapture(0)
+    weights_path = folder + 'yolo.weights'
+    config_path = folder + 'yolo.cfg'
     net = cv2.dnn.readNetFromDarknet(config_path, weights_path)
+    _confidence = 0.3
+    fps_c = FPSCounter()
+    while True:
 
-    # load our input image and grab its spatial dimensions
-    image = cv2.imread('C6K8Si9XEAED5wH.jpg')
-    (H, W) = image.shape[:2]
-    # determine only the *output* layer names that we need from YOLO
-    ln = net.getLayerNames()
-    ln = [ln[i[0] - 1] for i in net.getUnconnectedOutLayers()]
-    # construct a blob from the input image and then perform a forward
-    # pass of the YOLO object detector, giving us our bounding boxes and
-    # associated probabilities
-    blob = cv2.dnn.blobFromImage(image, 1 / 255.0, (416, 416),
-                                 swapRB=True, crop=False)
-    net.setInput(blob)
-    start = time.time()
-    layer_outputs = net.forward(ln)
-    end = time.time()
-    # show timing information on YOLO
-    print("[INFO] YOLO took {:.6f} seconds".format(end - start))
+        _, frame = camera.read()
 
-    """
-       Конфиденс и тресхолд - ручные параметры!
-       """
-    arg_confidence = 0.5
-    arg_threshold = 0.3
+        ln = net.getLayerNames()
+        ln = [ln[i[0] - 1] for i in net.getUnconnectedOutLayers()]
+        blob = cv2.dnn.blobFromImage(imutils.resize(frame, width=416), 1 / 255.0, (416, 416), crop=False)
+        net.setInput(blob)
+        (h, w) = frame.shape[:2]
+        class_id_list, boxes, confidences = [], [], []
+        for output in net.forward(ln):
+            for detection in output:
+                scores = detection[5:]
+                class_id = np.argmax(scores)
+                confidence = scores[class_id]
+                if confidence > _confidence:
+                    (centerX, centerY, width, height) = detection[0:4] * np.array([w, h, w, h]).astype("int")
+                    x = int(centerX - (width / 2))
+                    y = int(centerY - (height / 2))
+                    boxes.append([x, y, x + int(width), y + int(height)])
+                    confidences.append(float(confidence))
+                    class_id_list.append(class_id)
+        count = 0
+        idxs = cv2.dnn.NMSBoxes(boxes, confidences, _confidence, 0.2)
+        if len(idxs) > 0:
+            for i in idxs.flatten():
+                if class_id_list[i] == 0:
+                    count += 1
+                    draw_rectangle(frame, boxes[i], confidences[i])
+        fps_c.proc(frame)
+        cv2.imshow("Image", frame)
 
-    # initialize our lists of detected bounding boxes, confidences, and
-    # class IDs, respectively
-    boxes = []
-    confidences = []
+        key = cv2.waitKey(1) & 0xFF
 
-    class IDS:
-        lst = []
-
-        def put(self, obj):
-            self.lst.append(obj)
-
-        def get(self, index: int) -> int:
-            return self.lst[index]
-
-    class_id_list = IDS()
-
-    # loop over each of the layer outputs
-    for output in layer_outputs:
-        # loop over each of the detections
-        for detection in output:
-            # extract the class ID and confidence (i.e., probability) of
-            # the current object detection
-            scores = detection[5:]
-            class_id = np.argmax(scores)
-            confidence = scores[class_id]
-            # filter out weak predictions by ensuring the detected
-            # probability is greater than the minimum probability
-            if confidence > arg_confidence:
-                # scale the bounding box coordinates back relative to the
-                # size of the image, keeping in mind that YOLO actually
-                # returns the center (x, y)-coordinates of the bounding
-                # box followed by the boxes' width and height
-                box = detection[0:4] * np.array([W, H, W, H])
-                (centerX, centerY, width, height) = box.astype("int")
-                # use the center (x, y)-coordinates to derive the top and
-                # and left corner of the bounding box
-                x = int(centerX - (width / 2))
-                y = int(centerY - (height / 2))
-                # update our list of bounding box coordinates, confidences,
-                # and class IDs
-                boxes.append([x, y, int(width), int(height)])
-                confidences.append(float(confidence))
-                class_id_list.put(class_id)
-    # apply non-maxima suppression to suppress weak, overlapping bounding
-    # boxes
-
-    idxs = cv2.dnn.NMSBoxes(boxes, confidences, arg_confidence, arg_threshold)
-    # ensure at least one detection exists
-    if len(idxs) > 0:
-        # loop over the indexes we are keeping
-        for i in idxs.flatten():
-            # extract the bounding box coordinates
-            (x, y) = (boxes[i][0], boxes[i][1])
-            (w, h) = (boxes[i][2], boxes[i][3])
-            # draw a bounding box rectangle and label on the image
-            color = [int(c) for c in COLORS[class_id_list.get(i)]]
-            cv2.rectangle(image, (x, y), (x + w, y + h), color, 2)
-            text = "{}: {:.4f}".format(LABELS[class_id_list.get(i)], confidences[i])
-            cv2.putText(image, text, (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX,
-                        0.5, color, 2)
-    # show the output image
-    cv2.imshow("Image", image)
-    cv2.waitKey(0)
+        # if the `q` key was pressed, break from the loop
+        if key == ord("q"):
+            break
 
 
 if __name__ == '__main__':

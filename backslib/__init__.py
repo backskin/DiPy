@@ -1,37 +1,16 @@
-from time import sleep
-from threading import Thread
-from IPython.utils.timing import clock
-from PyQt5.QtCore import QObject, pyqtSignal
+from PyQt5.QtCore import QObject, pyqtSignal, QThread
 
 
-def precise_sleep(last_time, delay: float):
-    sleep(max(delay + last_time - clock(), 0))
-
-
-def do_in_background(func):
+class FastThread(QThread):
+    """ Runs a function in a thread, and alerts the parent when done.
     """
-    Работа, выполняемая в отдельном потоке
-    :param func:
-    выполняемая функция (без параметров)
-    :return:
-    """
-    parallel_thread = Thread(target=func)
-    parallel_thread.start()
+    def __init__(self, func, parent=None):
+        super(QThread, self).__init__(parent=parent)
+        self.func = func
+        self.start()
 
-
-def delayed_start(func, delay):
-    """
-    Метод отложенного запуска в отдельном потоке
-    :param func: выполняемая функция (без параметров)
-    :param delay: время задержки вызова функции (в секундах с плавающей точкой)
-    :return:
-    """
-
-    def do():
-        sleep(delay)
-        func()
-
-    do_in_background(do)
+    def run(self):
+        self.func()
 
 
 def load_picture(path: str):
@@ -48,16 +27,6 @@ class Signal(QObject):
     Используя pyqtSignal класс в своей основе, Signal позволяет
     строить весьма удобное семейство классов-сигналов с общим
     методом обращения за состоянием и привязке действий к сигналу.
-
-    В библиотеке Qt сигнал - это, по сути, то же, что и Listener
-    во многих других ООП языках; т.е. это объект, к которому можно
-    привязать выполнение конкретных методов в случае "триггера".
-
-    Данная реализация работает так: сначала к сигналу привязывают
-    методы с помощью connect_(function), затем в случае вызова
-    метода __emit__() в выделенном потоке будут вызываться и работать
-    все методы, отправленные ранее через connect_.
-
     Предполагается, что будут использоваться только классы, наследующие
     данный, дабы определять, какая _именно_ информация будет храниться
     в качестве сигнала (флаг, изображение, текст и т.д).
@@ -73,8 +42,8 @@ class Signal(QObject):
     def connect_(self, function):
         self._signal.connect(function)
 
-    def disconnect_(self):
-        self._signal.disconnect()
+    def disconnect_(self, slot=None):
+        self._signal.disconnect(slot)
 
 
 class ThresholdSignal(Signal):
@@ -88,9 +57,9 @@ class ThresholdSignal(Signal):
         self._th = threshold
         self._sign_state = positive
 
-    def set(self, val:int):
-        if val != self._val:
-            self._val = val
+    def set(self, val):
+        self._val = val
+        if val > self._th:
             self.__emit__(val)
 
     def value(self) -> int:
@@ -124,16 +93,13 @@ class FrameSignal(Signal):
     FrameSignal - сигнал, хранящий изображение в качестве информации.
     Вызывает __emit__ в случае попытки обновить изображение
     """
-    def __init__(self, pic=None):
+    def __init__(self):
         super().__init__()
-        self._pic = pic
 
     def set(self, picture):
         """
         метод обновляет содержимое изображение
         :param picture: новое изображение
-        :return:
         """
-        if self._pic is not picture:
-            self._pic = picture
-            self.__emit__(picture)
+        self.__emit__(picture)
+

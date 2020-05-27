@@ -1,4 +1,4 @@
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QObject
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtWidgets import QWidget, QLabel, QLayout, QGridLayout, QVBoxLayout, QHBoxLayout, \
     QTabWidget, QMainWindow, QSlider, QDial, QPushButton, QCheckBox, QRadioButton, QComboBox, \
@@ -16,7 +16,7 @@ from PyQt5.QtWidgets import QWidget, QLabel, QLayout, QGridLayout, QVBoxLayout, 
 """
 
 
-class _UIElement:
+class _UIElement(QObject):
     """
     Универсальный класс элемента интерфейса. Создан, потому что изначальные классы PyQt
     требуют значительной доработки и к тому же недостаточно интуитивны, легко запутаться
@@ -336,6 +336,7 @@ class HorizontalLayout(_Layout):
         super().__init__(QHBoxLayout())
 
 
+
 class VerticalLayout(_Layout):
     def __init__(self):
         super().__init__(QVBoxLayout())
@@ -386,6 +387,9 @@ class TabManager(_UIElement):
         """
         super().__init__(widget=QTabWidget())
         self.set_tabs_position(tab_pos)
+        font = self._inner_widget.tabBar().font()
+        font.setPointSize(12)
+        self._inner_widget.tabBar().setFont(font)
 
     def add_tab(self, tab: TabElement):
         """
@@ -420,6 +424,9 @@ class Window:
         self._window.closeEvent = lambda event: self._close_event_handler()
         self._menu_bar = None
         self._menu_list = None
+        self._status_bar = None
+
+    def add_status_bar(self):
         self._status_bar = self._window.statusBar()
 
     def add_menu(self, title: str):
@@ -437,10 +444,17 @@ class Window:
         self._window.setCentralWidget(layout.__widget__())
 
     def bottom_message(self, message: str = 'test'):
-        self._status_bar.showMessage(message)
+        if self._status_bar is not None:
+            self._status_bar.showMessage(message)
 
     def show(self):
         self._window.show()
+
+    def hide(self):
+        self._window.hide()
+
+    def close(self):
+        self._window.close()
 
     def _close_event_handler(self):
         for method in self._before_close_routine:
@@ -449,6 +463,8 @@ class Window:
     def add_method_on_close(self, function):
         self._before_close_routine.append(function)
 
+    def fix_size(self):
+        self._window.setFixedSize(self._window.size())
 
 class Application(QApplication):
     def __init__(self):
@@ -456,9 +472,11 @@ class Application(QApplication):
         super().__init__(sys.argv)
         self._windows = {}
 
-    def create_window(self, window_title: str = 'Template Window') -> Window:
+    def create_window(self, window_title: str = 'Template Window', with_status_bar:bool=False) -> Window:
         self._windows[str] = Window(window_title)
-        self._windows[str].show()
+        if with_status_bar:
+            self._windows[str].add_status_bar()
+
         return self._windows[str]
 
     def get_window(self, window_title: str):

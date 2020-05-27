@@ -1,186 +1,235 @@
-from backslib.ImageProcessor import Module
-from backslib import BoolSignal, ThresholdSignal
 import os
-import numpy as np
+
 import cv2
+import imutils as imutils
+import numpy as np
+
+from backslib import ThresholdSignal
+from backslib.ImageProcessor import Module
+
+
+def _tf_detect(frame, confidence, class_id, detection_graph):
+    import tensorflow as tf
+    with detection_graph.as_default():
+        with tf.compat.v1.Session(graph=detection_graph) as sess:
+            image_np_expanded = np.expand_dims(frame, axis=0)
+            image_tensor = detection_graph.get_tensor_by_name('image_tensor:0')
+            boxes = detection_graph.get_tensor_by_name('detection_boxes:0')
+            scores = detection_graph.get_tensor_by_name('detection_scores:0')
+            classes = detection_graph.get_tensor_by_name('detection_classes:0')
+            num_detections = detection_graph.get_tensor_by_name('num_detections:0')
+            (boxes, scores, classes, num_detections) = sess.run([boxes, scores,
+                                                                 classes, num_detections],
+                                                                feed_dict={image_tensor: image_np_expanded})
+            (h, w) = frame.shape[:2]
+            count = 0
+            for i in range(boxes.shape[0]):
+                if scores[0][i] > confidence:
+                    if classes[0][i] == class_id:
+                        count += 1
+            print('Found ' + str(count) + ' persons')
+
+
+def draw_rectangle(frame, coors, conf):
+    start_x, start_y, end_x, end_y = coors
+    label = "{}: {:.2f}%".format('person', conf * 100)
+    cv2.rectangle(frame, (start_x, start_y), (end_x, end_y),
+                  (255, 255, 255), 1)
+    y = start_y - 8 if start_y - 8 > 8 else start_y + 8
+    cv2.putText(frame, label, (start_x, y),
+                cv2.FONT_HERSHEY_PLAIN, 1, (255, 255, 255), 1)
 
 
 class DetectorModule(Module):
 
     def __init__(self):
         Module.__init__(self)
-        self._count_signal = ThresholdSignal(threshold=1)
+        self._amount = ThresholdSignal(threshold=1)
 
     def get_signal(self) -> ThresholdSignal:
-        return self._count_signal
+        """
+        :return: Возвращает сигнал порога (количества одновременно распознанных персон)
+        """
+        return self._amount
 
-    def _get_detections(self, frame):
-        pass
-
-    def _get_people_count(self, drawing_frame, detections) -> int:
-        pass
+    def _get_person_count(self, frame) -> int:
+        """
+        Перегружается потомком
+        :param frame: входящий на распознание кадр
+        """
 
     def __processing__(self, frame):
-        detections = self._get_detections(frame)
-        count = self._get_people_count(frame, detections)
-        if count > 0:
-            self._count_signal.set(count)
-        return frame
-
-
-class SimpleMovementModule(DetectorModule):
-    def __init__(self, area_param=12000):
-        super().__init__()
-        self._area_param = area_param
-        self._sec_frame = None
-
-    def set_min_area(self, area):
-        self._area_param = area
-
-    def _get_detections(self, frame):
-        from cv2 import cvtColor, absdiff, COLOR_BGR2GRAY, dilate, \
-            GaussianBlur, threshold, THRESH_BINARY, findContours, \
-            RETR_TREE, CHAIN_APPROX_SIMPLE
-        if self._sec_frame is None:
-            self._sec_frame = frame
-            return None
-        diff = absdiff(self._sec_frame, frame)
-        gray = cvtColor(diff, COLOR_BGR2GRAY)
-        blur = GaussianBlur(gray, (5, 5), 0)
-        _, thresh = threshold(blur, 20, 255, THRESH_BINARY)
-        dilated = dilate(thresh, None, iterations=2)
-        contours, _ = findContours(dilated, RETR_TREE, CHAIN_APPROX_SIMPLE)
-        self._sec_frame = frame.copy()
-        return contours
-
-    def _get_people_count(self, drawing_frame, detections) -> int:
-        from cv2 import boundingRect, contourArea, rectangle, \
-            FONT_HERSHEY_SIMPLEX, putText
-        if detections is None:
-            return 0
-        people_count = 0
-        for cont in detections:
-            (x, y, w, h) = boundingRect(cont)
-            if contourArea(cont) < self._area_param:
-                continue
-            people_count += 1
-            rectangle(drawing_frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
-            putText(drawing_frame, "Movement detected", (x, y), FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-        return people_count
+        count = self._get_person_count(frame)
+        self._amount.set(count)
 
 
 class CaffeDetector(DetectorModule):
-    def __init__(self, path):
+    def __init__(self, path, confidence, scalefactor, class_id):
         super().__init__()
         self._path = path
-        self.CLASSES = None
-        self._confidence_threshold = None
-        self.COLORS = None
-        print("[INFO] loading model...")
-        self.net = None
+        self._confidence = confidence
+        self._scale_factor = scalefactor
+        self._class_id = class_id
 
     def __startup__(self):
-        self.CLASSES = ['']*15 + ["person"] + ['']*5
-        self._confidence_threshold = 0.4
-        self.COLORS = np.random.uniform(0, 255, size=(len(self.CLASSES), 3))
-        print("[INFO] loading model...")
         self.net = cv2.dnn.readNetFromCaffe(self._path + os.sep + 'prototxt.txt',
                                             self._path + os.sep + 'model.caffemodel')
 
-    def _get_detections(self, frame):
-        blob = cv2.dnn.blobFromImage(cv2.resize(frame, (300, 300)), 0.007843, (300, 300), 127.5)
+    def _get_person_count(self, frame) -> int:
+        blob = cv2.dnn.blobFromImage(imutils.resize(frame, width=300), self._scale_factor, (300, 300), 127.5)
         self.net.setInput(blob)
-        return self.net.forward()
-
-    def _get_people_count(self, drawing_frame, detections) -> int:
-        people_count = 0
-        h, w = drawing_frame.shape[:2]
+        detections = self.net.forward()
+        h, w = frame.shape[:2]
+        count = 0
         for i in np.arange(0, detections.shape[2]):
-            confidence = detections[0, 0, i, 2]
-            if confidence > self._confidence_threshold:
-                idx = int(detections[0, 0, i, 1])
-                if str(self.CLASSES[idx]).lower() == 'person':
-                    people_count += 1
-                    box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
-                    (startX, startY, endX, endY) = box.astype("int")
-                    label = "{}: {:.2f}%".format(self.CLASSES[idx], confidence * 100)
-                    cv2.rectangle(drawing_frame, (startX, startY), (endX, endY),
-                                  self.COLORS[idx], 2)
-                    y = startY - 15 if startY - 15 > 15 else startY + 15
-                    cv2.putText(drawing_frame, label, (startX, y),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.COLORS[idx], 2)
-        return people_count
-
-    def __finish__(self):
-        super().__finish__()
+            real_confidence = detections[0, 0, i, 2]
+            if real_confidence > self._confidence:
+                if int(detections[0, 0, i, 1]) == self._class_id:  # 15 - это индекс класса 'person'
+                    count += 1
+                    coors = (detections[0, 0, i, 3:7] * np.array([w, h, w, h])).astype("int")
+                    draw_rectangle(frame, coors, real_confidence)
+        return count
 
 
 class YOLODetector(DetectorModule):
-    class IDS:
-        lst = []
-
-        def put(self, obj):
-            self.lst.append(obj)
-
-        def get(self, index: int) -> int:
-            return self.lst[index]
-
-    def __init__(self, folder_path):
+    def __init__(self, folder_path, confidence):
         DetectorModule.__init__(self)
-        weights_path = folder_path + os.path.sep + 'yolo.weights'
-        config_path = folder_path + os.path.sep + 'yolo.cfg'
-        labels_path = folder_path + os.path.sep + 'labels.names'
-        self.net = cv2.dnn.readNetFromDarknet(config_path, weights_path)
-        self.LABELS = open(labels_path).read().strip().split("\n")
-        np.random.seed(1996)
-        self.COLORS = np.random.randint(0, 255, size=(len(self.LABELS), 3), dtype="uint8")
+        self._confidence = confidence
+        self.folder = folder_path
 
-    def _get_detections(self, frame):
+    def __startup__(self):
+        self.net = cv2.dnn.readNetFromDarknet(self.folder + os.path.sep + 'yolo.cfg',
+                                              self.folder + os.path.sep + 'yolo.weights')
+
+    def _get_person_count(self, frame) -> int:
         ln = self.net.getLayerNames()
         ln = [ln[i[0] - 1] for i in self.net.getUnconnectedOutLayers()]
-        blob = cv2.dnn.blobFromImage(frame, 1 / 255.0, (416, 416),
-                                     swapRB=True, crop=False)
+        blob = cv2.dnn.blobFromImage(imutils.resize(frame, width=416), 1 / 255.0, (416, 416), crop=False)
         self.net.setInput(blob)
-        return self.net.forward(ln)
-
-    def _get_people_count(self, drawing_frame, detections) -> int:
-        (H, W) = drawing_frame.shape[:2]
-        class_id_list = YOLODetector.IDS()
-        boxes = []
-        confidences = []
-        arg_confidence = 0.3
-        arg_threshold = 0.2
-        for output in detections:
+        (h, w) = frame.shape[:2]
+        class_id_list, boxes, confidences = [], [], []
+        for output in self.net.forward(ln):
             for detection in output:
                 scores = detection[5:]
                 class_id = np.argmax(scores)
                 confidence = scores[class_id]
-                if confidence > arg_confidence:
-                    box = detection[0:4] * np.array([W, H, W, H])
-                    (centerX, centerY, width, height) = box.astype("int")
+                if confidence > self._confidence:
+                    (centerX, centerY, width, height) = detection[0:4] * np.array([w, h, w, h]).astype("int")
                     x = int(centerX - (width / 2))
                     y = int(centerY - (height / 2))
-                    boxes.append([x, y, int(width), int(height)])
+                    boxes.append([x, y, x + int(width), y + int(height)])
                     confidences.append(float(confidence))
-                    class_id_list.put(class_id)
-
-        idxs = cv2.dnn.NMSBoxes(boxes, confidences, arg_confidence, arg_threshold)
-        people_count = 0
+                    class_id_list.append(class_id)
+        count = 0
+        idxs = cv2.dnn.NMSBoxes(boxes, confidences, self._confidence, 0.2)
         if len(idxs) > 0:
             for i in idxs.flatten():
-                if self.LABELS[class_id_list.get(i)].lower() == 'person':
-                    people_count += 1
-                    (x, y) = (boxes[i][0], boxes[i][1])
-                    (w, h) = (boxes[i][2], boxes[i][3])
-                    color = [int(c) for c in self.COLORS[class_id_list.get(i)]]
-                    cv2.rectangle(drawing_frame, (x, y), (x + w, y + h), color, 2)
-                    text = "{}: {:.4f}".format(self.LABELS[class_id_list.get(i)], confidences[i])
-                    cv2.putText(drawing_frame, text, (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX,
-                                0.5, color, 2)
-        return people_count
+                if class_id_list[i] == 0:
+                    count += 1
+                    draw_rectangle(frame, boxes[i], confidences[i])
+        return count
+
+
 
 
 class TensorFlowDetector(DetectorModule):
-
-    def __init__(self, folder_path):
+    def __init__(self, folder_path, confidence, class_id):
         DetectorModule.__init__(self)
+        self._confidence = confidence
+        self._class_id = class_id
+        self.folder = folder_path
+        self.detection_graph = None
+
+    def __startup__(self):
+        import tensorflow as tf
+        PATH_TO_CKPT = self.folder + os.sep + 'frozen_inference_graph.pb'
+        self.detection_graph = tf.Graph()
+        with self.detection_graph.as_default():
+            od_graph_def = tf.compat.v1.GraphDef()
+            with tf.io.gfile.GFile(PATH_TO_CKPT, 'rb') as fid:
+                serialized_graph = fid.read()
+                od_graph_def.ParseFromString(serialized_graph)
+                tf.import_graph_def(od_graph_def, name='')
+
+
+    def _get_person_count(self, frame) -> int:
+        import tensorflow as tf
+        det_graph = self.detection_graph
+        count = 0
+        with det_graph.as_default():
+            with tf.compat.v1.Session(graph=det_graph) as sess:
+                frame_expanded = np.expand_dims(frame, axis=0)
+                image_tensor = det_graph.get_tensor_by_name('image_tensor:0')
+                boxes = det_graph.get_tensor_by_name('detection_boxes:0')
+                scores = det_graph.get_tensor_by_name('detection_scores:0')
+                classes = det_graph.get_tensor_by_name('detection_classes:0')
+                num_detections = det_graph.get_tensor_by_name('num_detections:0')
+
+                (boxes, scores, classes, num_detections) = sess.run(
+                    [boxes, scores, classes, num_detections], feed_dict={image_tensor: frame_expanded})
+
+                (h, w) = frame.shape[:2]
+                for i in np.arange(0, boxes.shape[0]):
+                    if scores[0, i] > self._confidence:
+                        if classes[0, i] == self._class_id:
+                            count += 1
+                            start_y, start_x, end_y, end_x = (boxes[0, i, :4] * np.array([h, w, h, w])).astype(
+                                "int")
+                            draw_rectangle(frame, (start_y, start_x, end_y, end_x), scores[0][i])
+        return count
+
+
+class TFLiteDetector(DetectorModule):
+    def __init__(self, folder_path):
+        import tensorflow as tf
+        import os
+        DetectorModule.__init__(self)
+        model_path = folder_path + os.sep + 'detect.tflite'
+        self.interpreter = tf.lite.Interpreter(model_path=model_path)
+        self.input_details = self.interpreter.get_input_details()
+        self.output_details = self.interpreter.get_output_details()
+        self.h = self.input_details[0]['shape'][1]
+        self.w = self.input_details[0]['shape'][2]
+        if self.input_details[0]['dtype'] == np.float32:
+            self.floating_model = True
+        self.interpreter.allocate_tensors()
+
+    def set_input_tensor(self, interpreter, image):
+        """Sets the input tensor."""
+        tensor_index = interpreter.get_input_details()[0]['index']
+        input_tensor = interpreter.tensor(tensor_index)()[0]
+        input_tensor[:, :] = image
+
+    def get_output_tensor(self, interpreter, index):
+        """Returns the output tensor at the given index."""
+        output_details = interpreter.get_output_details()[index]
+        tensor = np.squeeze(interpreter.get_tensor(output_details['index']))
+        return tensor
+
+    def __processing__(self, frame):
+        interpreter = self.interpreter
+        input_details = self.input_details
+        output_details = self.output_details
+        input_data = np.expand_dims(cv2.resize(frame, (self.h, self.w)), axis=0)
+        interpreter.set_tensor(input_details[0]['index'], input_data)
+        interpreter.invoke()
+        boxes = interpreter.get_tensor(output_details[0]['index'])
+        classes = interpreter.get_tensor(output_details[1]['index'])
+        scores = interpreter.get_tensor(output_details[2]['index'])
+        num = int(interpreter.get_tensor(output_details[3]['index'])[0])
+        if num > 0:
+            count = 0
+            for i in range(num):
+                sco = scores[0][i]
+                if sco > 0.7:
+                    if int(classes[0][i]) == 0:
+                        count += 1
+                        (h, w) = frame.shape[:2]
+                        start_y, start_x, end_y, end_x = (boxes[0][i][:4] * np.array([h, w, h, w])).astype("int")
+                        label = "{}: {:.2f}%".format('person', scores[0][i] * 100)
+                        cv2.rectangle(frame, (start_x, start_y), (end_x, end_y),
+                                      (255, 255, 255), 1)
+                        y = start_y - 8 if start_y - 8 > 8 else start_y + 8
+                        cv2.putText(frame, label, (start_x, y),
+                                    cv2.FONT_HERSHEY_PLAIN, 1, (255, 255, 255), 1)
+        return frame

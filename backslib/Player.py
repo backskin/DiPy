@@ -1,19 +1,21 @@
 from threading import Thread
 
-from IPython.utils.timing import clock
+from PyQt5.QtCore import QObject
 from cv2.cv2 import flip, VideoCapture, VideoWriter, \
     CAP_PROP_FRAME_WIDTH as WIDTH_PROPERTY, CAP_PROP_FRAME_HEIGHT as HEIGHT_PROPERTY
 
-from backslib import precise_sleep, BoolSignal, FrameSignal, Signal
+from backslib import BoolSignal, FrameSignal, FastThread
 
 
-class Player:
+class Player(QObject):
     """
     Данный класс представляет собой абстракцию некого "плеера", с двумя
     основными методами Play и Stop, а также с возможностью отслеживания
     его состояния посредством сигналов.
     """
+
     def __init__(self):
+        super().__init__()
         self._signal = BoolSignal()
         self._speed = 0.
         self._signal.connect_(self._player_slot)
@@ -45,55 +47,23 @@ class Player:
         self._signal.set(False)
 
     def __play__(self):
-        """
-        перезагружается в потомке
-        """
+        pass
 
     def __stop__(self):
-        """
-        перезагружается в потомке
-       """
-
-
-class SlideShow(Player):
-    def __init__(self, grabber, source=0):
-        super().__init__()
-        self._grab = grabber
-        self._source = source
-        self._thread = None
-
-    def set_source(self, source):
-        self._source = source
-
-    def __play__(self):
-        delay = 1. / self._speed if self._speed != 0 else None
-        self._thread = Thread(target=self._thread_func, args=(delay,))
-        self._thread.start()
-
-    def _thread_func(self, delay):
-        while self.get_signal().value():
-            time_start = clock()
-            if delay is not None:
-                precise_sleep(time_start, delay)
-
-    def __stop__(self):
-        self._thread.join()
-
-    def __close__(self):
-        self.get_signal().set(False)
+        pass
 
 
 class Streamer(Player):
-    """
-
-    """
     def __init__(self, grabber, source=0):
-        super().__init__()
+        Player.__init__(self)
         self._flip_state = False
         self._video_cap = VideoCapture()
-        self._grab = grabber
         self._source = source
+        self.grab = grabber
         self._thread = None
+
+    def set_grabber(self, grabber):
+        self.grab = grabber
 
     def set_source(self, source):
         self._source = source
@@ -120,46 +90,33 @@ class Streamer(Player):
     def set_property(self, PROP, value):
         self._video_cap.set(PROP, value)
 
-    def __play__(self):
+    def run(self):
+        from time import sleep, clock
         delay = 1. / self._speed if self._speed != 0 else None
-        self._video_cap.open(self._source)
-        self._thread = Thread(target=self._thread_func, args=(delay,))
-        self._thread.start()
-
-    def _thread_func(self, delay):
-        while self.get_signal().value():
+        while self._signal.value():
             time_start = clock()
-            stat, frame = self._video_cap.read()
-            if not stat:
-                break
-            if self._flip_state:
-                frame = flip(frame, 1)
-            if self.get_signal().value():
-                self._grab(frame)
+            _, frame = self._video_cap.read()
+            self.grab(flip(frame, 1) if self._flip_state else frame)
             if delay is not None:
-                precise_sleep(time_start, delay)
-        self._video_cap.release()
+                sleep(max(delay + time_start - clock(), 0))
 
-    def __stop__(self):
-        self._thread.join()
+    def __play__(self):
+        self._video_cap.open(self._source)
+        thread = FastThread(func=self.run, parent=self)
+        thread.start()
 
     def __close__(self):
-        self.get_signal().set(False)
+        self._signal.set(False)
         self._video_cap.release()
 
 
 class VideoRecorder(Player):
     """
     Класс-плеер, осуществляющий возможность записи получаемых
-    кадров в видеофайл. Не является потоком. Кадры записываются
-    посредством вызова метода add_frame. В остальном работает как плеер:
-    задал параметры (имя файла, размер кадра, скорость), включил через play()
-    и отправляешь все кадры через add_frame() метод. Затем выключаешь плеер
-    методом stop() - и в папке с программой автоматически сохраняется видеофайл
-    из отправленных кадров
+    кадров в видеофайл.
     """
-    def __init__(self):
 
+    def __init__(self):
         super().__init__()
         self._frame_size = (640, 480)  # default value
         self._output = None
@@ -178,7 +135,7 @@ class VideoRecorder(Player):
         self._frame_signal.connect_(self._initialize_record)
 
     def _initialize_record(self, frame):
-        self._frame_signal.disconnect_()
+        self._frame_signal.disconnect_(self._initialize_record)
         import os
         from datetime import datetime
         from cv2 import VideoWriter_fourcc as CVCodec
@@ -186,7 +143,7 @@ class VideoRecorder(Player):
         self._filename = "record_" + datetime.now().strftime("%Y%m%d_%H%M%S")
         self._output = VideoWriter('video-archive' + os.sep + self._filename + '.avi',
                                    CVCodec(*'XVID'), self._speed, (w, h))
-        self._frame_signal.connect_( self._output.write)
+        self._frame_signal.connect_(self._output.write)
 
     def __stop__(self):
         if self._output is not None:

@@ -1,17 +1,16 @@
+from PyQt5.QtCore import QObject
+
+
 class Module:
     """
     Абстрактный класс-предок для построения модулей, подключаемых к
     обработчику потока изображений
     """
 
-    def __init__(self):
-        pass
-
     def __startup__(self):
         """
         Метод, вызываемый при подключении модуля к обработчику
         """
-        pass
 
     def __processing__(self, frame):
         """
@@ -19,12 +18,12 @@ class Module:
         необходима перегрузка данного метода для каждого наследника!
         (т.е. каждый модуль должен иметь свой метод __process_frame__)
         :param frame - входящий кадр на обработку
-        :returns возвращает обработанный кадр
         """
-        return frame
 
     def __finish__(self):
-        pass
+        """
+        Метод, вызываемый непосредственно перед отключением модуля
+        """
 
 
 class ImageProcessor:
@@ -36,46 +35,9 @@ class ImageProcessor:
     """
 
     def __init__(self):
-        # self._input_frame_signal = FrameSignal()  # сигнал кадра на входе
-        # self._output_frame_signal = FrameSignal()  # сигнал кадра на выходе
         self._modules = []  # очередь модулей обработчика
+        self._module_tasks = []
         self._modules_places = {}  # словарь, содержащий индексы встроенных модулей
-        # self._input_frame_signal.connect_(lambda frame: self._modular_processing(frame))
-
-    def add_module_last(self, module: Module):
-        """
-        Добавляет модуль в конец очереди. Не добавляет тот же модуль второй раз.
-        :param module: встраиваемый модуль
-        """
-        if module in self._modules:
-            return
-        module.__startup__()
-        self._modules.append(module)
-        self._modules_places[module] = len(self._modules) - 1
-
-    def add_module_first(self, module: Module):
-        """
-        Добавляет модуль в начало очереди. Не добавляет тот же модуль второй раз.
-        :param module: встраиваемый модуль
-        """
-        if module in self._modules:
-            return
-        module.__startup__()
-        self._modules.insert(0, module)
-        self._modules_places[module] = 0
-
-    def add_module_precise(self, index: int, module: Module):
-        """
-        Добавляет модуль в точное положение в списке согласно входному индексу.
-        Не добавляет тот же модуль второй раз.
-        :param index: индекс, определяющий положение модуля (его место в очереди)
-        :param module: сам встраиваемый модуль
-        """
-        if module in self._modules:
-            return
-        module.__startup__()
-        self._modules.insert(index, module)
-        self._modules_places[module] = index
 
     def toggle_module(self, module: Module, append: bool = False):
         """
@@ -88,34 +50,23 @@ class ImageProcessor:
         :param append: опция вставки элемента в конец очереди
         """
         if module in self._modules:
-            module.__finish__()
-            self._modules.remove(module)
+            self.remove_module(module)
         else:
             module.__startup__()
             if module in self._modules_places:
                 self._modules.insert(self._modules_places[module], module)
+                self._module_tasks.insert(self._modules_places[module], module.__processing__)
             elif append:
                 self._modules.append(module)
+                self._module_tasks.append(module.__processing__)
             else:
                 self._modules.insert(0, module)
-
-    def get_module_place(self, module: Module):
-        """
-        Метод, возвращающий положение в очереди обработки
-        конкретного модуля, определяемого параметром
-        :param module: модуль, который мы ищем в очереди
-        :return: = индекс (положение) модуля в списке, если он содержится,
-                 иначе (если отсутствует) = -1
-        """
-        if module in self._modules:
-            return self._modules.index(module)
-        else:
-            return -1
+                self._module_tasks.insert(0, module.__processing__)
 
     def remove_module(self, module: Module):
-        if module in self._modules:
-            module.__finish__()
-            self._modules.remove(module)
+        module.__finish__()
+        self._module_tasks.remove(module.__processing__)
+        self._modules.remove(module)
 
     def finish_all(self):
         """
@@ -125,6 +76,7 @@ class ImageProcessor:
         for module in self._modules:
             module.__finish__()
         self._modules.clear()
+        self._module_tasks.clear()
 
     def catch(self, frame):
         """
@@ -132,21 +84,5 @@ class ImageProcessor:
         его на обработку модулями
         :param frame: входящий в обработчик кадр
         """
-        # self._input_frame_signal.set(frame)
-        self._modular_processing(frame)
-
-    def _modular_processing(self, frame):
-        """
-        Модульная поочерёдная обработка полученного кадра
-        :param frame: полученный кадр
-        """
-        for module in self._modules:
-            frame = module.__processing__(frame)
-        # self._output_frame_signal.set(frame)
-
-    # def get_output_frame_signal(self):
-    #     """
-    #     Возвращает _исходящий_ кадр-сигнал
-    #     :return:
-    #     """
-    #     return self._output_frame_signal
+        for task in self._module_tasks:
+            task(frame)
