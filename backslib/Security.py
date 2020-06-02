@@ -1,9 +1,9 @@
 from threading import Thread
 from time import sleep
 
-from PyQt5.QtCore import QObject, QThread
+from PyQt5.QtCore import QObject
 from backslib.DetectorModule import DetectorModule
-from backslib import BoolSignal, FastThread
+from backslib.signals import BoolSignal
 
 
 class Security(QObject):
@@ -11,50 +11,69 @@ class Security(QObject):
     Класс Охранной системы (по типу СКУД),
     содержащий абстрактные методы
     """
+
     def __init__(self, detector: DetectorModule):
         super().__init__()
-        self._detector_signal = detector.get_signal()  # Переменная для копии порогового сигнала детектирующего модуля
+        self._detector = detector  # Переменная для копии порогового сигнала детектирующего модуля
         self.trace_signal = BoolSignal()
+        self._granter = BoolSignal(True)
 
     def __deny_access__(self):
         """
         Метод, требующий перегрузки для внедрения внешнего модуля СКУД
         """
+        self._detector.deactivate()
+        self._detector.get_signal().disconnect_(self._drop_granter)
+
     def __grant_access__(self):
         """
         Метод, требующий перегрузки для внедрения внешнего модуля СКУД
         """
+
     def __alert__(self):
         """
         Метод, требующий перегрузки для внедрения внешнего модуля СКУД
         """
+
+    def __shutdown__(self):
+        """
+        Метод, требующий перегрузки для внедрения внешнего модуля СКУД
+        """
+
     def _start_trace(self):
-        state_still = BoolSignal(True)
-        lam_1 = lambda val: self.__alert__()
-        lam_2 = lambda val: state_still.set(False)
-        self._detector_signal.connect_(lam_1)
-        self._detector_signal.connect_(lam_2)
-        while self.trace_signal.value():
-            if not state_still.value():
-                break
-        self._detector_signal.disconnect_(lam_1)
-        self._detector_signal.disconnect_(lam_2)
 
-    def stop_tracing(self):
+        def trace():
+            while self.trace_signal.value():
+                if not self._granter.value():
+                    self.trace_signal.set(False)
+                    self.__alert__()
+                    break
+            self._detector.get_signal().disconnect_(self._drop_granter)
+
+        trace_th = Thread(target=trace)
+        trace_th.start()
+
+    def stop_trace(self):
         self.trace_signal.set(False)
+        self._detector.deactivate()
 
-    def require_access(self, delay: float = 1.0):
+    def _drop_granter(self, value): self._granter.set(False)
+
+    def require_access(self):
+        self._detector.activate()
+        self._detector.get_signal().connect_(self._drop_granter)
 
         def func():
-            granter = BoolSignal(True)
-            lam_1 = lambda val: granter.set(False)
-            self._detector_signal.connect_(lam_1)
-            sleep(delay)
-            self._detector_signal.disconnect_(lam_1)
-            if granter.value() and self._detector_signal.value() < 2:
+            while self._detector.get_signal().value() < 1:
+                pass
+            sleep(2.0)
+            if self._granter.value():
                 self.trace_signal.set(True)
-                self.__grant_access__()
                 self._start_trace()
+                self.__grant_access__()
+            else:
+                self._granter.set(True)
+                self.__deny_access__()
 
-        self.thread_on = Thread(target=func)
-        self.thread_on.start()
+        thread_on = Thread(target=func)
+        thread_on.start()

@@ -1,10 +1,13 @@
 from cv2.cv2 import CAP_PROP_BRIGHTNESS, CAP_PROP_CONTRAST, CAP_PROP_EXPOSURE, CAP_PROP_SATURATION, CAP_PROP_GAIN
 
 from backslib.backsgui import Application, HorizontalLayout, VerticalLayout, TabManager, TabElement, \
-    Button, CheckBox, Separator, NumericComboBox, Label, Slider
+    Button, CheckBox, Separator, NumericComboBox, Label, Slider, FileDialog
 from backslib.ImageProcessor import ImageProcessor
-from backslib.Player import Streamer
-from backslib.DetectorModule import CaffeDetector, YOLODetector, TensorFlowDetector, DetectorModule, TFLiteDetector
+from backslib.Streamer import Streamer
+from backslib.DetectorModule import DetectorModule
+from backslib.CaffeDetector import CaffeDetector
+from backslib.TensorFlowDetector import TensorFlowDetector, TFLiteDetector
+from backslib.DarkNetDetector import DarkNetDetector
 from external_modules import RecordModule, ImageBoxModule, ScreenShotModule, FPSCounter
 from external_security import WSec
 from datetime import datetime
@@ -13,6 +16,26 @@ from datetime import datetime
 На данный момент рабочая версия библиотеки OpenCV и для Windows и для Raspbian == 4.0.1.22
 Все остальные несовместимы с одной из систем.
 """
+
+
+def choose_file_source():
+    # filename = filedialog.askopenfilename(filetypes=(('AVI video', '*.avi'),
+    #                                                  ('MP4 video', '*.mp4'),
+    #                                                  ('Any Files', '*.*')))
+    file_dialog = FileDialog(window)
+    filename, file_type = file_dialog.open(type_filter='Video Files (*.avi *.mp4);; Any Files (*.*)')
+    if len(filename) > 0:
+        streamer.set_source(filename)
+        stream_label_val.set_text(filename)
+    fps_combobox.set_index(8)
+    recorder.set_speed(streamer.get_fps())
+
+
+def choose_camera_source():
+    streamer.set_source(0)
+    stream_label_val.set_text('Камера')
+    fps_combobox.set_index(8)
+
 
 app = Application()
 
@@ -34,7 +57,8 @@ streamer.get_signal().connect_(
 Настройка связи со стримером
 """
 frame_box = ImageBoxModule()
-streamer.get_signal().connect_(lambda val: manager.toggle_module(frame_box, append=True))
+frame_box.set_max_height(480)
+frame_box.set_max_width(640)
 frame_layout = VerticalLayout()
 frame_layout.add_element(frame_box)
 """
@@ -49,8 +73,18 @@ tabs.set_max_width(480)
     Чекбокс управления цветом. 
     Выпадающий список скорости потока (кадры в секунду)
 """
+source_filename = 'video.avi'
 stream_label = Label('Выбранный видеопоток:')
 stream_label_val = Label('Камера')
+button_choose_camera = Button('Камера')
+button_choose_video = Button('Внешний файл...')
+stream_label_val.set_min_height(60)
+button_choose_camera.set_function(choose_camera_source)
+button_choose_video.set_function(choose_file_source)
+streamer.get_signal().connect_(lambda val: button_choose_video.toggle_element(not val))
+streamer.get_signal().connect_(lambda val: button_choose_camera.toggle_element(not val))
+source_choice_layout = HorizontalLayout()
+source_choice_layout.add_all(button_choose_camera, button_choose_video)
 button_play = Button("Запустить")
 button_pause = Button("Остановить", disable=True)
 flip_checkbox = CheckBox('Отразить', disable=True)
@@ -64,25 +98,24 @@ rec_label = Label('Видеозапись в архив')
 button_start_rec = Button("Начать видеозапись", disable=True)
 button_stop_rec = Button("Завершить видеозапись", disable=True)
 
-
 button_play.set_function(streamer.play)
 button_pause.set_function(streamer.stop)
 streamer.get_signal().connect_(lambda val: button_play.toggle_element(not val))
 streamer.get_signal().connect_(button_pause.toggle_element)
 
-
 flip_checkbox.set_function(streamer.flip_toggle)
 streamer.get_signal().connect_(flip_checkbox.toggle_element)
 
 fps_combobox.send_value_to(streamer.set_speed)
-fps_combobox.send_value_to(recorder.set_speed)
+fps_combobox.send_value_to(lambda ignore_val: recorder.set_speed(streamer.get_fps()))
 fps_combobox.set_index(8)
 fps_module = FPSCounter()
 
 real_fps_checkbox.set_function(lambda val: manager.toggle_module(fps_module))
 streamer.get_signal().connect_(lambda val: fps_combobox.toggle_element(not val))
+streamer.get_signal().connect_(lambda val: manager.toggle_module(frame_box, append=True))
 
-rgb_checkbox.set_function(lambda: frame_box.fix_rgb(rgb_checkbox.state()))
+rgb_checkbox.set_function(lambda: frame_box.rgb_fixer(rgb_checkbox.state()))
 rgb_checkbox.click()
 rgb_checkbox.toggle_element(False)
 streamer.get_signal().connect_(rgb_checkbox.toggle_element)
@@ -95,10 +128,8 @@ recorder.get_signal().connect_(lambda val: button_start_rec.toggle_element(not v
 recorder.get_signal().connect_(lambda val: button_stop_rec.toggle_element(val))
 
 control_tab = TabElement("Управление")
-control_tab.set_max_height(480)
-control_tab.set_min_width(240)
 control_tab.set_padding(24, 16, 24, 8)
-control_tab.add_all(stream_label, stream_label_val,
+control_tab.add_all(stream_label, stream_label_val, source_choice_layout,
                     button_play, button_pause, Separator(),
                     flip_checkbox, rgb_checkbox,
                     fps_combobox, real_fps_checkbox,
@@ -158,6 +189,8 @@ streamer.get_signal().connect_(ss_button.toggle_element)
 streamer.get_signal().connect_(lambda val: manager.toggle_module(ss_module, append=True))
 detect_tab.add_all(ss_button, Label("Переключатели детекторов:"))
 
+securities = []
+
 
 def setup_detector(name: str, module: DetectorModule):
     """
@@ -168,11 +201,17 @@ def setup_detector(name: str, module: DetectorModule):
     Добавление внешней системы СКУД
     """
     box = CheckBox(name, disable=True)
-    demo_win_sec = WSec(name, app, module)
-    box.set_function(lambda: demo_win_sec.__load__() if box.state() else demo_win_sec.__shutdown__())
+    security = WSec(name, app, module)
+    securities.append(security)
+    box.set_function(lambda: security.__load__() if box.state() else security.__shutdown__())
     detect_tab.add_element(box)
     streamer.get_signal().connect_(lambda val: box.toggle_element(val))
     box.set_function(lambda: manager.toggle_module(module))
+
+
+def shutdown_securities():
+    for sec in securities:
+        sec.__shutdown__()
 
 
 def add_caffe_detector(path: str, name: str, confidence: float, scalefactor: float, class_id: int):
@@ -183,7 +222,7 @@ def add_caffe_detector(path: str, name: str, confidence: float, scalefactor: flo
 
 def add_yolo_detector(path: str, name: str, confidence: float):
     import os
-    module = YOLODetector('neuralnetworks' + os.sep + path, confidence)
+    module = DarkNetDetector('neuralnetworks' + os.sep + path, confidence)
     setup_detector(name, module)
 
 
@@ -193,21 +232,21 @@ def add_tf_detector(path: str, name: str, confidence: float, class_id: int):
     setup_detector(name, module)
 
 
-def add_tflite_detector(path: str, name: str):
+def add_tflite_detector(path: str, name: str, confidence: float):
     import os
-    module = TFLiteDetector('neuralnetworks' + os.sep + path)
+    module = TFLiteDetector('neuralnetworks' + os.sep + path, confidence)
     setup_detector(name, module)
 
 
 add_caffe_detector('caffe-mobilenet-ssdlite', 'MobileNet SSD det.', 0.35, 0.007843, 15)
 add_caffe_detector('caffe-ssd-face-res10', 'Res10 Face det', 0.4, 1.0, 1)
-add_caffe_detector('caffe-vggnet-coco-300', 'VGGNET-COCO det.', 0.3, 1.0, 1)
-add_caffe_detector('caffe-vggnet-voc-300', 'VGGNET-VOC det.', 0.3, 1.0, 15)
-add_yolo_detector('yolo-3-coco', 'YOLO Hard det.', 0.6)
-add_yolo_detector('yolo-3-tiny', 'YOLO Tiny det.', 0.15)
+# add_caffe_detector('caffe-vggnet-coco-300', 'VGGNET-COCO det.', 0.3, 1.0, 1)
+# add_caffe_detector('caffe-vggnet-voc-300', 'VGGNET-VOC det.', 0.3, 1.0, 15)
+add_yolo_detector('yolo-3-coco', 'YOLO Hard det.', 0.5)
+# add_yolo_detector('yolo-3-tiny', 'YOLO Tiny det.', 0.1)
 # add_tf_detector('tf-mobilenet-ssdlite', 'TENSORFLOW SSDlite det.', 0.7, 1)
 # add_tf_detector('tf-mobilenet-ssd', 'TENSORFLOW HARD det.', 0.7, 1)
-# add_tflite_detector('tflite-coco-ssd', 'TFLite det.')
+# add_tflite_detector('tflite-coco-ssd', 'TFLite det.', 0.5)
 
 """
 Завершающая часть настройки внешнего вида и управления
@@ -222,6 +261,7 @@ layout.add_element(tabs)
 window.set_main_layout(layout)
 window.add_method_on_close(manager.finish_all)
 window.add_method_on_close(streamer.__close__)
+window.add_method_on_close(shutdown_securities)
 
 window.show()
 app.start()

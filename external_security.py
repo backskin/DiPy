@@ -2,7 +2,6 @@ from backslib import load_picture
 from backslib.Security import Security
 from backslib.DetectorModule import DetectorModule
 from backslib.backsgui import Application, Label, Button, HorizontalLayout, TabElement, Separator, ImageBox
-import cv2
 import os
 
 DOOR_OPEN_IMAGE = load_picture('resources' + os.sep + 'open-door.jpg')
@@ -14,6 +13,8 @@ class WSec(Security):
     def __init__(self, name, app: Application, detector: DetectorModule):
         Security.__init__(self, detector)
         self.image = ImageBox()
+        self.image.set_max_width(260)
+        self.image.set_max_height(400)
         self.image.show_picture(DOOR_CLOSED_IMAGE)
         self.window = app.create_window('SECURITY DOOR :: ' + name)
         self.alert_box = Label('----------')
@@ -38,8 +39,7 @@ class WSec(Security):
         self.require_access()
 
     def close_door(self):
-
-        self.stop_tracing()
+        self.stop_trace()
         self.image.show_picture(DOOR_CLOSED_IMAGE)
         self.close_button.toggle_element(False)
         self.open_button.toggle_element(True)
@@ -58,6 +58,7 @@ class WSec(Security):
         self.window.fix_size()
 
     def __deny_access__(self):
+        super().__deny_access__()
         self.open_button.toggle_element(True)
         self.image.show_picture(DOOR_CLOSED_IMAGE)
         self.situation_box.set_text('Доступ ЗАПРЕЩЁН!')
@@ -71,10 +72,12 @@ class WSec(Security):
 
         self.alert_box.set_text('мы следим за вами...')
         for s in range(15, 0, -1):
-            self.situation_box.set_text('Дверь закроется через ' + str(s) + ' секунд'
-                                        + ('у' if s == 1 else 'ы' if s < 5 else ''))
-            if not self.trace_signal.value():
-                break
+            if self.trace_signal.value():
+                self.situation_box.set_text('Дверь закроется через '
+                                            + str(s) + ' секунд'
+                                            + ('у' if s == 1 else 'ы' if s < 5 else ''))
+            else:
+                return
             time.sleep(1)
         self.close_door()
 

@@ -34,7 +34,7 @@ class Parallel(Thread):
         self.start_time = None
         self.box = ImageBox()
         self.capture = cv2.VideoCapture()
-
+        
         detection_graph = tf.Graph()
         with detection_graph.as_default():
             od_graph_def = tf.compat.v1.GraphDef()
@@ -68,12 +68,12 @@ class Parallel(Thread):
                         [boxes, scores, classes, num_detections], feed_dict={image_tensor: image_np_expanded})
 
                     (h, w) = frame.shape[:2]
-                    for i in np.arange(0, boxes.shape[0]):
+                    for i in np.arange(0, boxes.shape[2]):
                         if scores[0, i] > 0.5:
                             if classes[0, i] == 1:
                                 start_y, start_x, end_y, end_x = (boxes[0, i, :4] * np.array([h, w, h, w])).astype(
                                     "int")
-                                draw_rectangle(frame, (start_y, start_x, end_y, end_x), scores[0][i])
+                                draw_rectangle(frame, (start_x, start_y, end_x, end_y), scores[0][i])
                     fps_count = 1 / (time.time() - self.start_time)
                     self.start_time = time.time()
                     fps_label = "{}: {:.2f}".format('FPS', fps_count)

@@ -1,7 +1,8 @@
+import cv2
 from PyQt5.QtCore import QObject
 
 
-class Module:
+class Module(QObject):
     """
     Абстрактный класс-предок для построения модулей, подключаемых к
     обработчику потока изображений
@@ -36,7 +37,6 @@ class ImageProcessor:
 
     def __init__(self):
         self._modules = []  # очередь модулей обработчика
-        self._module_tasks = []
         self._modules_places = {}  # словарь, содержащий индексы встроенных модулей
 
     def toggle_module(self, module: Module, append: bool = False):
@@ -53,19 +53,17 @@ class ImageProcessor:
             self.remove_module(module)
         else:
             module.__startup__()
-            if module in self._modules_places:
+            if module in self._modules_places.keys():
                 self._modules.insert(self._modules_places[module], module)
-                self._module_tasks.insert(self._modules_places[module], module.__processing__)
-            elif append:
-                self._modules.append(module)
-                self._module_tasks.append(module.__processing__)
             else:
-                self._modules.insert(0, module)
-                self._module_tasks.insert(0, module.__processing__)
+                if append:
+                    self._modules.append(module)
+                else:
+                    self._modules.insert(0, module)
+                self._modules_places[module] = self._modules.index(module)
 
     def remove_module(self, module: Module):
         module.__finish__()
-        self._module_tasks.remove(module.__processing__)
         self._modules.remove(module)
 
     def finish_all(self):
@@ -76,7 +74,6 @@ class ImageProcessor:
         for module in self._modules:
             module.__finish__()
         self._modules.clear()
-        self._module_tasks.clear()
 
     def catch(self, frame):
         """
@@ -84,5 +81,8 @@ class ImageProcessor:
         его на обработку модулями
         :param frame: входящий в обработчик кадр
         """
-        for task in self._module_tasks:
-            task(frame)
+        w = 640
+        h = int(frame.shape[0]*(640/frame.shape[1]))
+        frame = cv2.resize(frame, (w, h))
+        for module in self._modules:
+            module.__processing__(frame)

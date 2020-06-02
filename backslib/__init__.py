@@ -1,4 +1,4 @@
-from PyQt5.QtCore import QObject, pyqtSignal, QThread
+from PyQt5.QtCore import QThread
 
 
 class FastThread(QThread):
@@ -20,86 +20,46 @@ def load_picture(path: str):
     return img
 
 
-class Signal(QObject):
-    """
-    Этот класс-обёртка служит важным звеном в построении логики
-    управления с помощью графического интерфейса на базе PyQt.
-    Используя pyqtSignal класс в своей основе, Signal позволяет
-    строить весьма удобное семейство классов-сигналов с общим
-    методом обращения за состоянием и привязке действий к сигналу.
-    Предполагается, что будут использоваться только классы, наследующие
-    данный, дабы определять, какая _именно_ информация будет храниться
-    в качестве сигнала (флаг, изображение, текст и т.д).
-    """
-    _signal = pyqtSignal(object)
+def create_video_slideshow(pictures_folder: str, fps:float):
+    from backslib.Player import VideoRecorder
+    import os
+    import cv2
 
-    def __init__(self):
-        super().__init__()
+    pics_list = []
+    for name in os.listdir(pictures_folder):  # file_list[:] makes a copy of file_list.
+        if name.endswith(".jpg"):
+            pics_list.append(cv2.imread(name))
+    vcr = VideoRecorder()
+    vcr.play()
+    vcr.set_speed(fps)
+    vcr.set_filename('slideshow')
+    vcr.put_frame(pics_list[0])
 
-    def __emit__(self, obj):
-        self._signal.emit(obj)
+    for pic in pics_list:
+        vcr.put_frame(pic)
+    vcr.stop()
 
-    def connect_(self, function):
-        self._signal.connect(function)
-
-    def disconnect_(self, slot=None):
-        self._signal.disconnect(slot)
+    print('successfully created video '+vcr.get_filename())
 
 
-class ThresholdSignal(Signal):
-    """
-    ThresholdSignal - числовой сигнал, вызывает __emit() при
-    переходе за числовой порог
-    """
-    def __init__(self, threshold: int = 0, positive: bool = True):
-        super().__init__()
-        self._val = 0
-        self._th = threshold
-        self._sign_state = positive
+def change_video_fps(video_path, new_fps):
+    from backslib.Player import VideoRecorder
+    import cv2
+    import os
+    name = os.path.basename(video_path)
 
-    def set(self, val):
-        self._val = val
-        if val > self._th:
-            self.__emit__(val)
+    print('CHANGIN FPS for '+name)
+    vc = cv2.VideoCapture(video_path)
+    vcr = VideoRecorder()
+    vcr.set_filename(name.split('.')[0]+'_fpschanged')
+    vcr.set_speed(new_fps)
+    vcr.play()
+    frame_counter = 0
+    while frame_counter < vc.get(cv2.CAP_PROP_FRAME_COUNT):
+        _, frame = vc.read()
+        frame_counter += 1
+        print(str(frame_counter)+'-th frame')
+        vcr.put_frame(frame)
 
-    def value(self) -> int:
-        return self._val
-
-
-class BoolSignal(Signal):
-    """
-    BoolSignal - бинарный сигнал, содержит bool поле,
-    вызывает __emit__() при изменении состояния
-    True на False, vice versa (именно изменении)
-    """
-    def __init__(self, def_val: bool = False):
-        super().__init__()
-        self._val = def_val
-
-    def set(self, val: bool):
-        if val != self._val:
-            self._val = val
-            self.__emit__(val)
-
-    def toggle(self):
-        self.set(not self.value())
-
-    def value(self):
-        return self._val
-
-
-class FrameSignal(Signal):
-    """
-    FrameSignal - сигнал, хранящий изображение в качестве информации.
-    Вызывает __emit__ в случае попытки обновить изображение
-    """
-    def __init__(self):
-        super().__init__()
-
-    def set(self, picture):
-        """
-        метод обновляет содержимое изображение
-        :param picture: новое изображение
-        """
-        self.__emit__(picture)
-
+    vcr.stop()
+    print('done!')

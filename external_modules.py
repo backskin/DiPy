@@ -35,15 +35,12 @@ class ImageBoxModule(Module, ImageBox):
         ImageBox.__init__(self, starter_pic=self.STANDBY_PICTURE)
         self._fix_rgb_state = False
 
-    def fix_rgb(self, state=True):
+    def rgb_fixer(self, state=True):
         self._fix_rgb_state = state
 
     def __processing__(self, frame):
         from cv2 import cvtColor, COLOR_BGR2RGB
-        if self._fix_rgb_state:
-            self.show_picture(cvtColor(frame, COLOR_BGR2RGB))
-        else:
-            self.show_picture(frame)
+        self.show_picture(cvtColor(frame, COLOR_BGR2RGB) if self._fix_rgb_state else frame)
 
     def __finish__(self):
         self.show_picture(self.STANDBY_PICTURE)
@@ -60,8 +57,8 @@ class RecordModule(Module, VideoRecorder):
         Module.__init__(self)
         VideoRecorder.__init__(self)
         self.__processing__ = self.put_frame
-        self.__startup__ = lambda this: self.play()
-        self.__finish__ = lambda this: self.stop()
+        self.__startup__ = self.play
+        self.__finish__ = self.stop
 
 
 class ScreenShotModule(Module):
