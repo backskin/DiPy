@@ -1,5 +1,4 @@
 from backslib.DetectorModule import DetectorModule
-import imutils
 import os
 import cv2
 import numpy as np
@@ -15,10 +14,10 @@ class DarkNetDetector(DetectorModule):
         self.net = cv2.dnn.readNetFromDarknet(self.folder + os.path.sep + 'yolo.cfg',
                                               self.folder + os.path.sep + 'yolo.weights')
 
-    def _get_person_detection(self, frame) -> list:
+    def get_person_detection(self, frame) -> list:
         ln = self.net.getLayerNames()
         ln = [ln[i[0] - 1] for i in self.net.getUnconnectedOutLayers()]
-        blob = cv2.dnn.blobFromImage(imutils.resize(frame, width=416), 1 / 255.0, (416, 416), crop=False)
+        blob = cv2.dnn.blobFromImage(frame, 1 / 255.0, (320, 320), crop=False)
         self.net.setInput(blob)
         (h, w) = frame.shape[:2]
         class_id_list, boxes, confidences = [], [], []

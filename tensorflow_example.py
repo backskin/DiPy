@@ -5,7 +5,7 @@ from threading import Thread
 import cv2
 import numpy as np
 import tensorflow as tf
-from backslib.backsgui import Application, ImageBox, VerticalLayout, Label
+from backslib import Application, ImageBox, VerticalLayout, Label
 
 # Models can bee found here:
 # https://github.com/tensorflow/models/blob/master/research/object_detection/g3doc/detection_model_zoo.md

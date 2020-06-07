@@ -20,23 +20,30 @@ def load_picture(path: str):
     return img
 
 
-def create_video_slideshow(pictures_folder: str, fps:float):
+def create_video_slideshow(pictures_folder: str, seconds_per_frame):
     from backslib.Player import VideoRecorder
     import os
     import cv2
-
-    pics_list = []
-    for name in os.listdir(pictures_folder):  # file_list[:] makes a copy of file_list.
-        if name.endswith(".jpg"):
-            pics_list.append(cv2.imread(name))
     vcr = VideoRecorder()
     vcr.play()
-    vcr.set_speed(fps)
-    vcr.set_filename('slideshow')
-    vcr.put_frame(pics_list[0])
+    vcr.set_speed(0)
+    vcr.set_file_tag('slideshow')
+    pics_list = []
+    for name in os.listdir(pictures_folder):
+        if name.endswith(".jpg"):
+            pics_list.append(pictures_folder + os.sep + name)
+    print(len(pics_list))
+    vcr.put_frame(cv2.resize(cv2.imread(pics_list[0]), (640, 480)))
 
     for pic in pics_list:
-        vcr.put_frame(pic)
+        frame = cv2.imread(pic)
+        if frame is None:
+            print(pic)
+            continue
+        img = cv2.resize(frame, (640, 480))
+        for _ in range(int(25 * seconds_per_frame)):
+            vcr.put_frame(img)
+        print('f')
     vcr.stop()
 
     print('successfully created video '+vcr.get_filename())
@@ -51,7 +58,7 @@ def change_video_fps(video_path, new_fps):
     print('CHANGIN FPS for '+name)
     vc = cv2.VideoCapture(video_path)
     vcr = VideoRecorder()
-    vcr.set_filename(name.split('.')[0]+'_fpschanged')
+    vcr.set_file_tag(name.split('.')[0] + '_fpschanged')
     vcr.set_speed(new_fps)
     vcr.play()
     frame_counter = 0

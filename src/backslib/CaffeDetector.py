@@ -1,4 +1,4 @@
-from backslib.DetectorModule import DetectorModule, draw_rectangle
+from backslib.DetectorModule import DetectorModule
 import os
 import numpy as np
 import imutils
@@ -17,7 +17,7 @@ class CaffeDetector(DetectorModule):
         self.net = cv2.dnn.readNetFromCaffe(self._path + os.sep + 'prototxt.txt',
                                             self._path + os.sep + 'model.caffemodel')
 
-    def _get_person_detection(self, frame) -> list:
+    def get_person_detection(self, frame) -> list:
         blob = cv2.dnn.blobFromImage(imutils.resize(frame, width=300), self._scale_factor, (300, 300), 127.5)
         self.net.setInput(blob)
         detections = self.net.forward()

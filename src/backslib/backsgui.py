@@ -1,5 +1,5 @@
 from PyQt5.QtCore import Qt, QObject
-from PyQt5.QtGui import QImage, QPixmap
+from PyQt5.QtGui import QImage, QPixmap, QIcon
 from PyQt5.QtWidgets import QWidget, QLabel, QLayout, QGridLayout, QVBoxLayout, QHBoxLayout, \
     QTabWidget, QMainWindow, QSlider, QDial, QPushButton, QCheckBox, QRadioButton, QComboBox, \
     QSpinBox, QLineEdit, QApplication, QAction, QFrame, QFileDialog, QSizePolicy
@@ -88,6 +88,11 @@ class Label(_UIElement):
     def __init__(self, text: str = ''):
         super().__init__(widget=QLabel(text))
         self.__widget__().setWordWrap(True)
+
+    def set_font_size(self, size: int):
+        new_font = QLabel().font()
+        new_font.setPointSize(size)
+        self.__widget__().setFont(new_font)
 
     def set_text(self, text: str):
         self._inner_widget.setText(text)
@@ -206,6 +211,7 @@ class _AbstractButton(_UIElement):
 class Button(_AbstractButton):
     def __init__(self, description: str, disable=False):
         super().__init__(QPushButton(description), disable)
+        self.__widget__().setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
 
 class CheckBox(_AbstractButton):
@@ -287,11 +293,18 @@ class _Layout(_UIElement):
         super().__init__(layout=layout)
 
     def add_element(self, element: _UIElement):
-        self._layout.addWidget(element.__widget__())
+        self._layout.addWidget(element.__widget__(), alignment=self.__layout__().alignment())
 
     def add_all(self, *elements):
         for elem in elements:
             self.add_element(elem)
+
+    def align_left(self):
+        self.__layout__().setAlignment(Qt.AlignTop)
+
+    def align_center(self):
+        self.__layout__().setAlignment(Qt.AlignCenter)
+        pass
 
     def set_padding(self, left=0, up=0, right=0, bottom=0):
         """
@@ -391,8 +404,10 @@ class TabManager(_UIElement):
 
 class Window:
     def __init__(self, title: str):
+        import os
         self._window = QMainWindow()
         self._window.setWindowTitle(title)
+        self._window.setWindowIcon(QIcon('resources'+os.sep+'icon.png'))
         self._before_close_routine = []
         self._window.closeEvent = lambda event: self._close_event_handler()
         self._menu_bar = None

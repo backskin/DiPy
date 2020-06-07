@@ -54,11 +54,12 @@ class Streamer(Player):
 
     def run(self):
         from time import sleep, clock
-        delay = 1. / self._speed if self._speed != 0 else 1. / self.get_fps()
+        delay = 1. / self._speed if self._speed != 0 \
+            else 1. / self.get_fps() if self._source != 0 else None
         total_frames = self._video_cap.get(CAP_PROP_FRAME_COUNT)
         while self._signal.value():
             time_start = clock()
-            if self._source is not 0:
+            if self._source != 0:
                 if self._frame_counter == total_frames:
                     self.set_source(self._source)
             _, frame = self._video_cap.read()
@@ -66,7 +67,8 @@ class Streamer(Player):
                 continue
             self._frame_counter += 1
             self.grab(flip(frame, 1) if self._flip_state else frame)
-            sleep(max(delay + time_start - clock(), 0))
+            if delay is not None:
+                sleep(max(delay + time_start - clock(), 0))
 
     def __play__(self):
         self._video_cap.open(self._source)

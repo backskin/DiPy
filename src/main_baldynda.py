@@ -8,8 +8,8 @@ from backslib.DetectorModule import DetectorModule
 from backslib.CaffeDetector import CaffeDetector
 from backslib.TensorFlowDetector import TensorFlowDetector, TFLiteDetector
 from backslib.DarkNetDetector import DarkNetDetector
-from external_modules import RecordModule, ImageBoxModule, ScreenShotModule, FPSCounter
-from external_security import WSec
+from src.external_modules import RecordModule, ImageBoxModule, ScreenShotModule, FPSCounter
+from src.external_security import WSec
 from datetime import datetime
 
 """
@@ -19,14 +19,12 @@ from datetime import datetime
 
 
 def choose_file_source():
-    # filename = filedialog.askopenfilename(filetypes=(('AVI video', '*.avi'),
-    #                                                  ('MP4 video', '*.mp4'),
-    #                                                  ('Any Files', '*.*')))
     file_dialog = FileDialog(window)
     filename, file_type = file_dialog.open(type_filter='Video Files (*.avi *.mp4);; Any Files (*.*)')
     if len(filename) > 0:
         streamer.set_source(filename)
         stream_label_val.set_text(filename)
+        stream_label_val.set_font_size(8)
     fps_combobox.set_index(8)
     recorder.set_speed(streamer.get_fps())
 
@@ -34,13 +32,14 @@ def choose_file_source():
 def choose_camera_source():
     streamer.set_source(0)
     stream_label_val.set_text('Камера')
+    stream_label_val.set_font_size(16)
     fps_combobox.set_index(8)
 
 
 app = Application()
 
-window = app.create_window("Main Window", with_status_bar=True)
-window.bottom_message('Backsecure версии 0.0.1')
+window = app.create_window("Система обнаружения несанкционированного прохода", with_status_bar=True)
+window.bottom_message('версия ПО 0.0.1')
 manager = ImageProcessor()
 recorder = RecordModule()
 recorder.get_signal().connect_(
@@ -74,19 +73,21 @@ tabs.set_max_width(480)
     Выпадающий список скорости потока (кадры в секунду)
 """
 source_filename = 'video.avi'
-stream_label = Label('Выбранный видеопоток:')
-stream_label_val = Label('Камера')
+stream_label_val = Label()
 button_choose_camera = Button('Камера')
 button_choose_video = Button('Внешний файл...')
-stream_label_val.set_min_height(60)
 button_choose_camera.set_function(choose_camera_source)
 button_choose_video.set_function(choose_file_source)
 streamer.get_signal().connect_(lambda val: button_choose_video.toggle_element(not val))
 streamer.get_signal().connect_(lambda val: button_choose_camera.toggle_element(not val))
 source_choice_layout = HorizontalLayout()
-source_choice_layout.add_all(button_choose_camera, button_choose_video)
-button_play = Button("Запустить")
-button_pause = Button("Остановить", disable=True)
+source_choice_layout.align_center()
+src_buttons = VerticalLayout()
+src_buttons.align_left()
+src_buttons.add_all(button_choose_camera, button_choose_video)
+source_choice_layout.add_all(Label('Сменить источник:'), src_buttons)
+button_play = Button("Запустить трансляцию")
+button_pause = Button("Остановить трансляцию", disable=True)
 flip_checkbox = CheckBox('Отразить', disable=True)
 fps_combobox = NumericComboBox(["2 FPS", "3 FPS", "4 FPS", "6 FPS", "12 FPS",
                                 "16 FPS", "24 FPS", "30 FPS", 'Неограниченно'],
@@ -127,14 +128,12 @@ streamer.get_signal().connect_(lambda val: button_start_rec.toggle_element(val))
 recorder.get_signal().connect_(lambda val: button_start_rec.toggle_element(not val and streamer.get_signal().value()))
 recorder.get_signal().connect_(lambda val: button_stop_rec.toggle_element(val))
 
-control_tab = TabElement("Управление")
+control_tab = TabElement("Видеопоток")
 control_tab.set_padding(24, 16, 24, 8)
-control_tab.add_all(stream_label, stream_label_val, source_choice_layout,
-                    button_play, button_pause, Separator(),
-                    flip_checkbox, rgb_checkbox,
+control_tab.add_all(Label('Текущий видеопоток:'), stream_label_val, source_choice_layout,
+                    Separator(), button_play, button_pause, Separator(),
                     fps_combobox, real_fps_checkbox,
-                    Separator(), rec_label,
-                    button_start_rec, button_stop_rec)
+                    )
 
 """
 Вкладка управления настройками камеры.
@@ -173,12 +172,12 @@ flow_layout.add_element(setup_slider("Яркость", CAP_PROP_BRIGHTNESS, (0, 
 flow_layout.add_element(setup_slider("Цветность", CAP_PROP_SATURATION, (0, 255), 1))
 # gain is not supported on Raspberry Pi
 flow_layout.add_element(setup_slider("Уровень белого", CAP_PROP_GAIN, (0, 255), 1))
-adjust_tab.add_all(adjs_checkbox, flow_layout)
+adjust_tab.add_all(flip_checkbox, rgb_checkbox, Separator(), adjs_checkbox, flow_layout)
 
 """
 Вкладка управления компьютерным зрением и охранной системой.
 """
-detect_tab = TabElement("Система охраны")
+detect_tab = TabElement("Охрана")
 detect_tab.set_padding(24, 16, 24, 0)
 
 ss_module = ScreenShotModule()
@@ -187,7 +186,10 @@ ss_button.set_function(ss_module.save_screenshot)
 ss_button.set_function(lambda: window.bottom_message('Cкриншот сохранён как ' + ss_module.get_name()))
 streamer.get_signal().connect_(ss_button.toggle_element)
 streamer.get_signal().connect_(lambda val: manager.toggle_module(ss_module, append=True))
-detect_tab.add_all(ss_button, Label("Переключатели детекторов:"))
+detect_tab.add_all(ss_button, Separator(), rec_label,
+                   button_start_rec, button_stop_rec,
+                   Separator(),
+                   Label("Переключатели детекторов:"))
 
 securities = []
 
@@ -239,10 +241,10 @@ def add_tflite_detector(path: str, name: str, confidence: float):
 
 
 add_caffe_detector('caffe-mobilenet-ssdlite', 'MobileNet SSD det.', 0.35, 0.007843, 15)
-add_caffe_detector('caffe-ssd-face-res10', 'Res10 Face det', 0.4, 1.0, 1)
+# add_caffe_detector('caffe-ssd-face-res10', 'Res10 Face det', 0.4, 1.0, 1)
 # add_caffe_detector('caffe-vggnet-coco-300', 'VGGNET-COCO det.', 0.3, 1.0, 1)
-# add_caffe_detector('caffe-vggnet-voc-300', 'VGGNET-VOC det.', 0.3, 1.0, 15)
-add_yolo_detector('yolo-3-coco', 'YOLO Hard det.', 0.5)
+add_caffe_detector('caffe-vggnet-voc-300', 'VGGNET-VOC det.', 0.3, 1.0, 15)
+# add_yolo_detector('yolo-3-coco', 'YOLO Hard det.', 0.5)
 # add_yolo_detector('yolo-3-tiny', 'YOLO Tiny det.', 0.1)
 # add_tf_detector('tf-mobilenet-ssdlite', 'TENSORFLOW SSDlite det.', 0.7, 1)
 # add_tf_detector('tf-mobilenet-ssd', 'TENSORFLOW HARD det.', 0.7, 1)
@@ -252,8 +254,8 @@ add_yolo_detector('yolo-3-coco', 'YOLO Hard det.', 0.5)
 Завершающая часть настройки внешнего вида и управления
 """
 tabs.add_tab(control_tab)
-tabs.add_tab(adjust_tab)
 tabs.add_tab(detect_tab)
+tabs.add_tab(adjust_tab)
 
 layout = HorizontalLayout()
 layout.add_element(frame_layout)
@@ -262,6 +264,6 @@ window.set_main_layout(layout)
 window.add_method_on_close(manager.finish_all)
 window.add_method_on_close(streamer.__close__)
 window.add_method_on_close(shutdown_securities)
-
+choose_camera_source()
 window.show()
 app.start()

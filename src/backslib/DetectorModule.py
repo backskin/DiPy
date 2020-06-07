@@ -3,15 +3,15 @@ from backslib.signals import ThresholdSignal, BoolSignal
 from backslib.ImageProcessor import Module
 
 
-def draw_rectangle(frame, coors, conf):
+def draw_rectangle(frame, coors, conf=None, thickness=1, color=(0, 255, 0)):
     import cv2
     start_x, start_y, end_x, end_y = coors
-    label = "{}: {:.2f}%".format('person', conf * 100)
-    cv2.rectangle(frame, (start_x, start_y), (end_x, end_y),
-                  (255, 255, 255), 1)
+    cv2.rectangle(frame, (start_x, start_y), (end_x, end_y), color, thickness)
     y = start_y - 8 if start_y - 8 > 8 else start_y + 8
-    cv2.putText(frame, label, (start_x, y),
-                cv2.FONT_HERSHEY_PLAIN, 1, (255, 255, 255), 1)
+    if conf is not None:
+        label = "{}: {:.2f}%".format('person', conf * 100)
+        cv2.putText(frame, label, (start_x, y),
+                    cv2.FONT_HERSHEY_PLAIN, 1, color, 1)
 
 
 def draw_detector_fps(frame, fps: float):
@@ -52,7 +52,7 @@ class DetectorModule(Module):
         """
         return self._threshold_signal
 
-    def _get_person_detection(self, frame) -> list:
+    def get_person_detection(self, frame) -> list:
         """
         Перегружается потомком
         :param frame: входящий на распознание кадр
@@ -66,7 +66,7 @@ class DetectorModule(Module):
                 def parallel(input_frame):
                     from time import time
                     start_time = time()
-                    self._boxes = self._get_person_detection(input_frame)
+                    self._boxes = self.get_person_detection(input_frame)
                     self._fps = 1. / (time() - start_time)
                     self._process_busy = False
 
@@ -74,7 +74,7 @@ class DetectorModule(Module):
                 self._inner_thread.start()
 
             for box in self._boxes:
-                draw_rectangle(frame, box[0], box[1])
+                draw_rectangle(frame, box[0], box[1], color=(50, 255, 50))
             draw_detector_fps(frame, self._fps)
             self._threshold_signal.set(len(self._boxes))
 
