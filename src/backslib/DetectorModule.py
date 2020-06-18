@@ -3,7 +3,7 @@ from backslib.signals import ThresholdSignal, BoolSignal
 from backslib.ImageProcessor import Module
 
 
-def draw_rectangle(frame, coors, conf=None, thickness=1, color=(0, 255, 0)):
+def draw_rectangle(frame, coors, conf=None, thickness=1, color=(0, 255, 120)):
     import cv2
     start_x, start_y, end_x, end_y = coors
     cv2.rectangle(frame, (start_x, start_y), (end_x, end_y), color, thickness)
@@ -72,11 +72,14 @@ class DetectorModule(Module):
 
                 self._inner_thread = FastThread(func=lambda: parallel(frame), parent=self)
                 self._inner_thread.start()
-
-            for box in self._boxes:
-                draw_rectangle(frame, box[0], box[1], color=(50, 255, 50))
-            draw_detector_fps(frame, self._fps)
             self._threshold_signal.set(len(self._boxes))
+            if self._threshold_signal.value() < 2:
+                COLOR = (50, 200, 0)
+            else:
+                COLOR = (50, 0, 200)
+            for box in self._boxes:
+                draw_rectangle(frame, box[0], box[1], thickness=3, color=COLOR)
+            draw_detector_fps(frame, self._fps)
 
     def __finish__(self):
         self._active = False

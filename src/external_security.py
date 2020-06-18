@@ -52,10 +52,12 @@ class WSec(Security):
         self.open_button.toggle_element(True)
         self.window.close()
         self.image.show_picture(DOOR_CLOSED_IMAGE)
+        self._detector.deactivate()
 
     def __load__(self):
         self.window.show()
         self.window.fix_size()
+        self._detector.activate()
 
     def __deny_access__(self):
         super().__deny_access__()

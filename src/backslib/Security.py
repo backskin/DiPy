@@ -22,7 +22,7 @@ class Security(QObject):
         """
         Метод, требующий перегрузки для внедрения внешнего модуля СКУД
         """
-        self._detector.deactivate()
+        # self._detector.deactivate()
         self._detector.get_signal().disconnect_(self._drop_granter)
 
     def __grant_access__(self):
@@ -55,12 +55,12 @@ class Security(QObject):
 
     def stop_trace(self):
         self.trace_signal.set(False)
-        self._detector.deactivate()
+        # self._detector.deactivate()
 
     def _drop_granter(self, value): self._granter.set(False)
 
     def require_access(self):
-        self._detector.activate()
+        # self._detector.activate()
         self._detector.get_signal().connect_(self._drop_granter)
 
         def func():

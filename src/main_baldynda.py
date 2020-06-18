@@ -23,8 +23,10 @@ def choose_file_source():
     filename, file_type = file_dialog.open(type_filter='Video Files (*.avi *.mp4);; Any Files (*.*)')
     if len(filename) > 0:
         streamer.set_source(filename)
-        stream_label_val.set_text(filename)
-        stream_label_val.set_font_size(8)
+        # stream_label_val.set_text(filename)
+        stream_label_val.set_text('Камера')
+        # stream_label_val.set_font_size(8)
+        stream_label_val.set_font_size(16)
     fps_combobox.set_index(8)
     recorder.set_speed(streamer.get_fps())
 
@@ -87,7 +89,9 @@ src_buttons.align_left()
 src_buttons.add_all(button_choose_camera, button_choose_video)
 source_choice_layout.add_all(Label('Сменить источник:'), src_buttons)
 button_play = Button("Запустить трансляцию")
-button_pause = Button("Остановить трансляцию", disable=True)
+button_pause = Button('Пауза')
+button_pause.set_function(streamer.pause_toggle)
+button_stop = Button("Остановить трансляцию", disable=True)
 flip_checkbox = CheckBox('Отразить', disable=True)
 fps_combobox = NumericComboBox(["2 FPS", "3 FPS", "4 FPS", "6 FPS", "12 FPS",
                                 "16 FPS", "24 FPS", "30 FPS", 'Неограниченно'],
@@ -100,9 +104,9 @@ button_start_rec = Button("Начать видеозапись", disable=True)
 button_stop_rec = Button("Завершить видеозапись", disable=True)
 
 button_play.set_function(streamer.play)
-button_pause.set_function(streamer.stop)
+button_stop.set_function(streamer.stop)
 streamer.get_signal().connect_(lambda val: button_play.toggle_element(not val))
-streamer.get_signal().connect_(button_pause.toggle_element)
+streamer.get_signal().connect_(button_stop.toggle_element)
 
 flip_checkbox.set_function(streamer.flip_toggle)
 streamer.get_signal().connect_(flip_checkbox.toggle_element)
@@ -131,7 +135,7 @@ recorder.get_signal().connect_(lambda val: button_stop_rec.toggle_element(val))
 control_tab = TabElement("Видеопоток")
 control_tab.set_padding(24, 16, 24, 8)
 control_tab.add_all(Label('Текущий видеопоток:'), stream_label_val, source_choice_layout,
-                    Separator(), button_play, button_pause, Separator(),
+                    Separator(), button_play, button_stop, Separator(),
                     fps_combobox, real_fps_checkbox,
                     )
 
@@ -244,8 +248,8 @@ add_caffe_detector('caffe-mobilenet-ssdlite', 'MobileNet SSD det.', 0.35, 0.0078
 # add_caffe_detector('caffe-ssd-face-res10', 'Res10 Face det', 0.4, 1.0, 1)
 # add_caffe_detector('caffe-vggnet-coco-300', 'VGGNET-COCO det.', 0.3, 1.0, 1)
 add_caffe_detector('caffe-vggnet-voc-300', 'VGGNET-VOC det.', 0.3, 1.0, 15)
-# add_yolo_detector('yolo-3-coco', 'YOLO Hard det.', 0.5)
-# add_yolo_detector('yolo-3-tiny', 'YOLO Tiny det.', 0.1)
+# add_yolo_detector('yolo3-coco', 'YOLO Hard det.', 0.5)
+# add_yolo_detector('yolo3-tiny', 'YOLO Tiny det.', 0.1)
 # add_tf_detector('tf-mobilenet-ssdlite', 'TENSORFLOW SSDlite det.', 0.7, 1)
 # add_tf_detector('tf-mobilenet-ssd', 'TENSORFLOW HARD det.', 0.7, 1)
 # add_tflite_detector('tflite-coco-ssd', 'TFLite det.', 0.5)
@@ -265,5 +269,11 @@ window.add_method_on_close(manager.finish_all)
 window.add_method_on_close(streamer.__close__)
 window.add_method_on_close(shutdown_securities)
 choose_camera_source()
+
+# secret_window = app.create_window('secret window')
+# secret_layout = VerticalLayout()
+# secret_layout.add_element(button_pause)
+# secret_window.set_main_layout(secret_layout)
+# secret_window.show()
 window.show()
 app.start()
