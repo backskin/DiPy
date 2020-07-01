@@ -58,8 +58,8 @@ streamer.get_signal().connect_(
 Настройка связи со стримером
 """
 frame_box = ImageBoxModule()
-frame_box.set_max_height(480)
-frame_box.set_max_width(640)
+# frame_box.set_max_height(480)
+# frame_box.set_max_width(640)
 frame_layout = VerticalLayout()
 frame_layout.add_element(frame_box)
 """
@@ -67,7 +67,7 @@ frame_layout.add_element(frame_box)
 """
 tabs = TabManager()
 tabs.set_tabs_position(pos='l')
-tabs.set_max_width(480)
+tabs.set_max_width(360)
 """
 Вкладка управления потоком. Содержит: 
     кнопки Play/Pause Stream; Start/Stop Rec.
@@ -206,13 +206,17 @@ def setup_detector(name: str, module: DetectorModule):
     """
     Добавление внешней системы СКУД
     """
-    box = CheckBox(name, disable=True)
+    module_toggle_checkbox = CheckBox(name, disable=True)
+
     security = WSec(name, app, module)
     securities.append(security)
-    box.set_function(lambda: security.__load__() if box.state() else security.__shutdown__())
-    detect_tab.add_element(box)
-    streamer.get_signal().connect_(lambda val: box.toggle_element(val))
-    box.set_function(lambda: manager.toggle_module(module))
+    show_fps_checkbox = CheckBox('показать частоту кадров')
+    module_toggle_checkbox.set_function(
+        lambda: security.__load__() if module_toggle_checkbox.state() else security.__shutdown__())
+    show_fps_checkbox.set_function(module.toggle_fps)
+    detect_tab.add_all(module_toggle_checkbox, show_fps_checkbox)
+    streamer.get_signal().connect_(lambda val: module_toggle_checkbox.toggle_element(val))
+    module_toggle_checkbox.set_function(lambda: manager.toggle_module(module))
 
 
 def shutdown_securities():
@@ -262,8 +266,7 @@ tabs.add_tab(detect_tab)
 tabs.add_tab(adjust_tab)
 
 layout = HorizontalLayout()
-layout.add_element(frame_layout)
-layout.add_element(tabs)
+layout.add_all(frame_layout, tabs)
 window.set_main_layout(layout)
 window.add_method_on_close(manager.finish_all)
 window.add_method_on_close(streamer.__close__)

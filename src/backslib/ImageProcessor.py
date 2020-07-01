@@ -81,8 +81,8 @@ class ImageProcessor:
         его на обработку модулями
         :param frame: входящий в обработчик кадр
         """
-        w = 640
-        h = int(frame.shape[0]*(640/frame.shape[1]))
-        frame = cv2.resize(frame, (w, h))
+        # w = 640
+        # h = int(frame.shape[0]*(640/frame.shape[1]))
+        # frame = cv2.resize(frame, (w, h))
         for module in self._modules:
             module.__processing__(frame)

@@ -29,7 +29,7 @@ class _UIElement(QObject):
     """
 
     def __init__(self, widget: QWidget = None, layout: QLayout = None,
-                 description: str = None, disable: bool = False):
+                 description: str = None, disable: bool = False, stroked: bool = False):
         """
         :param widget: класс Qt Widget, который будет отображаться как элемент интерфейса
         :param layout: класс слоя, который будет основанием, на котором будет лежать виджет
@@ -43,6 +43,8 @@ class _UIElement(QObject):
         self._layout.setContentsMargins(2, 2, 2, 2)
         if description is not None or layout is not None:
             self._out_widget = QFrame()
+            if stroked:
+                self._out_widget.setFrameStyle(QFrame.Plain)
             if description is not None:
                 self._layout.addWidget(QLabel(description), alignment=Qt.AlignCenter)
             if widget is not None:

@@ -19,9 +19,9 @@ class FPSCounter(Module):
         if self._last_time is None:
             self._last_time = time.time()
         else:
+            cv2.rectangle(frame, (0, 0), (90, 20), FPSCounter.WHITE, thickness=-1)
             fps_count = 1 / (time.time() - self._last_time)
             fps_label = "{}: {:.2f}".format('FPS', fps_count)
-            cv2.rectangle(frame, (0, 0), (90, 20), FPSCounter.WHITE, thickness=-1)
             cv2.putText(frame, fps_label, (0, 15),
                         cv2.FONT_HERSHEY_DUPLEX, 0.5, FPSCounter.BLACK, 1)
             self._last_time = time.time()

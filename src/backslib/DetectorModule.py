@@ -35,8 +35,12 @@ class DetectorModule(Module):
         self._process_busy = False
         self._inner_thread = None
         self._active = False
+        self._show_fps = False
         self._boxes = []
         self._fps = 0.0
+
+    def toggle_fps(self):
+        self._show_fps = not self._show_fps
 
     def activate(self):
         self._active = True
@@ -79,7 +83,8 @@ class DetectorModule(Module):
                 COLOR = (50, 0, 200)
             for box in self._boxes:
                 draw_rectangle(frame, box[0], box[1], thickness=3, color=COLOR)
-            draw_detector_fps(frame, self._fps)
+            if self._show_fps:
+                draw_detector_fps(frame, self._fps)
 
     def __finish__(self):
         self._active = False
